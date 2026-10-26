@@ -75,3 +75,23 @@
 
 /* V14.8 actual SMS inquiry */
 .inquiry-box{margin:20px 0 14px;padding:22px;border:1px solid #dfe6d8;border-radius:20px;background:linear-gradient(145deg,#f4f7ef,#fcfaf4);text-align:center}.inquiry-icon{font-size:29px;color:#647f65;margin-bottom:6px}.inquiry-box h3{font-size:19px;margin:5px 0 8px;color:#354c39}.inquiry-box p{font-size:13px;line-height:1.65;color:#657064}.inquiry-box label{display:block;text-align:left;margin:15px 0 7px;font-weight:700;font-size:13px;color:#405842}.inquiry-box select{display:block;width:100%;padding:13px 12px;border:1px solid #cbd8c9;border-radius:12px;background:#fff;color:#344238;font:inherit}.inquiry-send{display:block;width:100%;border:0;border-radius:12px;padding:15px;margin-top:14px;background:#58755b;color:white;font-weight:700;font-size:16px;cursor:pointer}.inquiry-send:disabled{opacity:.48;cursor:not-allowed}.inquiry-box .inquiry-hint{margin:10px 0}.inquiry-box .inquiry-privacy{font-size:12px;color:#68746b;border-top:1px solid #e0e7da;padding-top:12px;margin-top:12px}
+
+
+/* V15.1 — booking layout readability fix (desktop + mobile) */
+.booking-layout-art{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+.booking-layout-art>.booking-info-panel{grid-column:1/-1;grid-row:auto}
+.booking-layout-art .booking-info-body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 18px;padding:10px 24px}
+.booking-layout-art .booking-info-item{min-width:0;border-bottom:0;padding:14px 0}
+.booking-layout-art .booking-calendar-panel,.booking-layout-art .booking-times-panel{grid-column:auto;grid-row:auto;min-width:0;height:auto}
+.booking-layout-art>.panel{padding:28px;min-width:0}
+.booking-layout-art .calendar button{min-height:43px;font-size:14px}
+.booking-layout-art .time-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.booking-layout-art .time-grid button{font-size:14px;min-height:45px}
+.online-booking-wide{width:100%;max-width:none;margin:24px 0 0;padding:30px 34px}
+.online-booking-wide .online-booking-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.online-booking-wide .online-booking-fields input{min-width:0}
+.online-booking-wide .online-consent{max-width:780px}
+.online-booking-wide .online-feedback{overflow-wrap:anywhere}
+@media(max-width:900px){.booking-layout-art .booking-info-body{grid-template-columns:repeat(2,minmax(0,1fr))}.booking-layout-art .booking-info-item{border-bottom:1px solid #e5e5db}}
+@media(max-width:720px){.booking-layout-art{grid-template-columns:minmax(0,1fr);gap:16px}.booking-layout-art>.booking-info-panel{grid-column:auto}.booking-layout-art .booking-info-body{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 17px}.booking-layout-art .booking-calendar-panel,.booking-layout-art .booking-times-panel{grid-column:auto}.booking-layout-art>.panel{padding:22px 18px}.online-booking-wide{padding:23px 18px}.online-booking-wide .online-booking-fields{grid-template-columns:1fr;gap:8px}}
+@media(max-width:390px){.booking-layout-art .booking-info-body{grid-template-columns:1fr}.booking-layout-art .time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
