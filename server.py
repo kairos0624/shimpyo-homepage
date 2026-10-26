@@ -15,6 +15,7 @@ DB=Path(os.environ.get('SHIMPYO_DB_PATH', str(BASE/'private'/'reservations.sqlit
 ADMIN_PASSWORD=os.environ.get('SHIMPYO_ADMIN_PASSWORD','')
 SECRET=os.environ.get('SHIMPYO_SECRET_KEY','')
 KAKAO_REST_KEY=os.environ.get('SHIMPYO_KAKAO_REST_KEY','').strip()
+KAKAO_CLIENT_SECRET=os.environ.get('SHIMPYO_KAKAO_CLIENT_SECRET','').strip()
 KAKAO_REDIRECT_URI=os.environ.get('SHIMPYO_KAKAO_REDIRECT_URI','https://shimpyo-homepage.onrender.com/auth/kakao/callback').strip()
 if not ADMIN_PASSWORD or not SECRET or len(SECRET)<32:
     raise RuntimeError('운영 전 SHIMPYO_ADMIN_PASSWORD 와 32자 이상 SHIMPYO_SECRET_KEY 를 설정하세요.')
@@ -32,6 +33,8 @@ with db() as c:
  c.execute("CREATE TABLE IF NOT EXISTS kakao_auth (id INTEGER PRIMARY KEY CHECK(id=1), access_token TEXT NOT NULL, refresh_token TEXT NOT NULL, expires_at INTEGER NOT NULL)")
 
 def kakao_post(url, fields, access_token=None):
+ if url=='https://kauth.kakao.com/oauth/token' and KAKAO_CLIENT_SECRET:
+  fields={**fields,'client_secret':KAKAO_CLIENT_SECRET}
  payload=urllib.parse.urlencode(fields).encode('utf-8')
  headers={'Content-Type':'application/x-www-form-urlencoded;charset=utf-8'}
  if access_token:headers['Authorization']='Bearer '+access_token
