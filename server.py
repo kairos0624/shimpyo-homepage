@@ -183,6 +183,19 @@ def secure(resp):
  resp.headers['X-Content-Type-Options']='nosniff';resp.headers['Content-Security-Policy']="frame-ancestors 'none'; base-uri 'self'; object-src 'none'";resp.headers['X-Frame-Options']='DENY';resp.headers['Referrer-Policy']='strict-origin-when-cross-origin';resp.headers['Cache-Control']='no-store' if request.path.startswith('/admin') or request.path.startswith('/api') else 'no-cache'
  return resp
 
+@app.get('/api/reservations/availability')
+def reservation_availability():
+  """Public, privacy-safe list of approved time slots for a single date."""
+  day=request.args.get('date','')
+  try:
+   d=date.fromisoformat(day)
+   if d.isoformat()!=day or d<local_today() or d>local_today()+timedelta(days=180):raise ValueError()
+  except (ValueError,TypeError):
+   return jsonify(error='조회할 날짜를 확인해 주세요.'),400
+  with db() as c:
+   rows=c.execute("SELECT slot FROM reservations WHERE day=? AND status='approved'",(day,)).fetchall()
+  return jsonify(date=day,blocked=sorted({r['slot'] for r in rows}))
+
 @app.post('/api/reservations')
 def create():
  ip=request.remote_addr or 'unknown'
@@ -278,7 +291,7 @@ def admin():return send_from_directory(str(BASE),'admin.html')
 @app.get('/api/admin/reservations')
 @admin_required
 def list_reservations():
- with db() as c:rows=c.execute('SELECT id,receipt,name,phone,program,day,slot,status,created_at FROM reservations ORDER BY day DESC,slot DESC,id DESC LIMIT 500').fetchall()
+ with db() as c:rows=c.execute('SELECT id,receipt,name,phone,program,day,slot,status,created_at FROM reservations ORDER BY created_at DESC,id DESC LIMIT 500').fetchall()
  return jsonify([dict(r) for r in rows])
 @app.post('/api/admin/reservations/<int:rid>/status')
 @admin_required
