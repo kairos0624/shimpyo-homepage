@@ -216,6 +216,20 @@ body{display:flex;min-width:0}
 @media(max-width:1100px){.inquiry-table{min-width:940px}}
 </style><style>
 .inquiry-list{display:grid;gap:12px}.inquiry-item{background:white;border:1px solid #dce6dc;border-radius:14px;padding:18px;overflow-wrap:anywhere}.inquiry-item .inquiry-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}.inquiry-item .inquiry-message{white-space:pre-wrap;line-height:1.7;margin:14px 0}.inquiry-item .inquiry-actions{display:flex;gap:8px;flex-wrap:wrap}.inquiry-status{background:#fff0d2;border-radius:14px;padding:4px 10px;font-size:13px}.inquiry-status.done{background:#e4efe4}
+
+/* 문의 내용 미리보기 및 전체보기 팝업 */
+.inquiry-table .inq-message{max-width:0}
+.inquiry-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;text-align:left;width:100%;border:0;background:transparent;padding:3px 2px;color:#263d30;font:inherit;cursor:pointer}
+.inquiry-preview:hover,.inquiry-preview:focus-visible{color:#276d4b;text-decoration:underline;outline-offset:2px}
+.inquiry-modal-overlay{position:fixed;inset:0;background:rgba(15,31,23,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.inquiry-modal{background:#fff;color:#24392c;border-radius:16px;box-shadow:0 16px 55px rgba(0,0,0,.2);width:min(600px,100%);max-height:min(82vh,760px);display:flex;flex-direction:column;overflow:hidden}
+.inquiry-modal-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 24px;border-bottom:1px solid #e4eae4}
+.inquiry-modal-header h3{margin:0;font-size:21px}
+.inquiry-modal-close{border:1px solid #b9cbbb;border-radius:8px;background:#fff;padding:7px 12px;cursor:pointer;font-size:16px}
+.inquiry-modal-body{padding:22px 24px;overflow-y:auto;min-height:0}
+.inquiry-modal-meta{color:#566a5a;font-size:14px;margin-bottom:16px;line-height:1.8;overflow-wrap:anywhere}
+.inquiry-modal-message{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;font-size:16px;margin:0}
+body.inquiry-modal-open{overflow:hidden}
 </style></head><body><aside class="sidebar" aria-label="관리자 메뉴"><div class="brand">심리상담 쉼표<small>관리자 대시보드</small></div><nav class="tabs" aria-label="주 메뉴"><button id="tabBookings" class="active" onclick="showTab('bookings')">▦ &nbsp; 예약 관리</button><button id="tabCalendar" onclick="showTab('calendar')">▦ &nbsp; 상담 일정표</button><button id="tabInquiries" onclick="showTab('inquiries')">✉ &nbsp; 문의 관리</button><button id="tabStats" onclick="showTab('stats')">▥ &nbsp; 방문자 통계</button></nav><div class="sidebar-footer"><button onclick="logout()">로그아웃</button></div></aside><div class="content-shell"><header><h1>심리상담 쉼표 · 예약 관리</h1><div>신청 내역 확인 · 승인 · 거절 · 중복 승인 방지</div></header><main><section id="statsView" class="hide"><h2>홈페이지 방문 통계</h2><p class="hint">브라우저 익명 식별값 기준 추정 방문자 · 한국시간 기준 · 실제 수집 이후부터 집계</p><div class="toolbar"><button onclick="loadStats()">통계 새로고침</button><select id="statsRange" onchange="renderStats()"><option value="7">최근 7일</option><option value="30">최근 30일</option></select></div><p id="statsMessage" role="status"></p><div id="statsCards" class="stats"></div><div class="panels visitor-panels"><div class="panel visitor-chart-panel"><h3>일별 방문자 추이</h3><div class="visitor-chart-scroll"><div id="visitorsChart" class="visitor-chart" role="img" aria-label="일별 방문자 수 그래프"></div></div><p id="chartCaption" class="hint"></p></div><div class="panel"><h3>유입 경로</h3><div id="sourceRows"></div></div><div class="panel"><h3>인기 페이지</h3><div id="pageRows"></div></div></div><p class="hint">유입 경로는 참조 사이트 또는 UTM을 기준으로 분류하며, 미확인 방문은 직접·미확인으로 표시합니다. 예약 전환율은 같은 달의 방문자와 신청 건수를 비교한 참고 지표로, 개별 방문자의 예약을 추적하지 않습니다.</p></section><section id="inquiriesView" class="hide"><h2>문의 관리</h2><p class="hint">홈페이지 문의하기에서 접수된 내용을 확인합니다. 새 문의는 카카오톡 알림도 시도합니다.</p><div class="toolbar inquiry-toolbar"><label for="inquirySearch">문의 검색 <input id="inquirySearch" type="search" placeholder="이름 · 연락처 · 문의 내용" autocomplete="off" oninput="inquiryPage=1;renderInquiries()" /></label><button type="button" onclick="document.getElementById('inquirySearch').value='';inquiryPage=1;renderInquiries()">검색 초기화</button><label>상태 <select id="inquiryFilter" onchange="inquiryPage=1;renderInquiries()"><option value="all">전체</option><option value="new">미확인</option><option value="done">확인 완료</option></select></label><button type="button" onclick="loadInquiries()">문의 새로고침</button></div><p id="inquiryMsg" role="status"></p><div id="inquiryList" class="inquiry-list"></div><div id="inquiryPagination" class="inquiry-pagination" aria-label="문의 페이지 이동"></div></section><section id="calendarView" class="hide"><h2>상담 일정표</h2><p class="hint">상담 예약 날짜를 기준으로 표시합니다. 날짜를 선택하면 상담 시간과 예약 상세정보를 확인할 수 있습니다.</p><div class="calendar-controls"><button type="button" id="calendarPrev" aria-label="이전 달">‹ 이전 달</button><h3 id="calendarTitle" aria-live="polite"></h3><button type="button" id="calendarToday">이번 달</button><button type="button" id="calendarNext" aria-label="다음 달">다음 달 ›</button><button type="button" onclick="load()">일정 새로고침</button></div><div class="calendar-legend"><span><i class="cal-dot approved"></i>승인 완료</span><span><i class="cal-dot pending"></i>승인 대기</span><span><i class="cal-dot rejected"></i>거절</span></div><div class="calendar-scroll"><div class="calendar-grid" id="calendarGrid" aria-label="월간 상담 예약 달력"></div></div><div class="calendar-details"><h3 id="calendarDayTitle">날짜를 선택해 주세요</h3><div id="calendarDayList" aria-live="polite"></div></div></section><section id="bookingsView"><div class="toolbar"><label class="booking-search-label" for="bookingSearch">예약 검색 <input id="bookingSearch" type="search" placeholder="이름 · 연락처 · 접수번호" autocomplete="off" aria-label="예약자 이름, 연락처 또는 접수번호 검색"></label><button type="button" id="clearBookingSearch" onclick="clearBookingSearch()">검색 초기화</button><label>상태 <select id="filter"><option value="all">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">거절</option></select></label><label>정렬 <select id="sortOrder"><option value="newest">신청일 최신순</option><option value="booking">상담 예약일순</option><option value="oldest">신청일 오래된순</option></select></label><button onclick="load()">새로고침</button><button class="mobile-logout" onclick="logout()">로그아웃</button></div><p id="msg" role="status"></p><div id="cards" class="cards"></div><nav id="pagination" class="pagination" aria-label="예약 목록 페이지"></nav><p id="paginationInfo" class="pagination-info"></p><p class="small">예약 승인·거절은 관리자 화면의 상태 변경입니다. 신청자에게 자동 문자나 이메일은 발송되지 않으므로 별도로 연락해 주세요. 개인정보 보관 기간과 삭제 기준을 정해 운영해 주세요.</p></section></main></div><script>let statsData=null;
 function showTab(which){const inquiries=which==='inquiries';document.getElementById('inquiriesView').classList.toggle('hide',!inquiries);document.getElementById('tabInquiries').classList.toggle('active',inquiries);const stats=which==='stats',calendar=which==='calendar';document.getElementById('statsView').classList.toggle('hide',!stats);document.getElementById('calendarView').classList.toggle('hide',!calendar);document.getElementById('bookingsView').classList.toggle('hide',stats||calendar||inquiries);document.getElementById('tabStats').classList.toggle('active',stats);document.getElementById('tabCalendar').classList.toggle('active',calendar);document.getElementById('tabBookings').classList.toggle('active',!stats&&!calendar&&!inquiries);document.querySelector('.content-shell').scrollTop=0;if(stats)loadStats();if(calendar)renderCalendar();if(inquiries)loadInquiries()}
 async function loadStats(){const m=document.getElementById('statsMessage');m.textContent='통계를 불러오는 중입니다...';try{const r=await fetch('/api/admin/analytics',{cache:'no-store'});if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw Error('통계 조회 실패');statsData=await r.json();m.textContent='';renderStats()}catch(e){m.textContent='통계를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}}
@@ -406,7 +420,8 @@ function renderInquiries(){
   const cell=(cls,value)=>{const td=document.createElement('td');td.className=cls;td.textContent=value;tr.append(td);return td};
   cell('inq-number',String(selected.length-start-i));
   cell('inq-date',String(x.created_at||'').replace('T',' ').replace(/\+09:00$/,''));
-  cell('inq-name',x.name||'');cell('inq-phone',x.phone||'');cell('inq-message',x.message||'');
+  cell('inq-name',x.name||'');cell('inq-phone',x.phone||'');
+  const messageCell=cell('inq-message','');const preview=document.createElement('button');preview.type='button';preview.className='inquiry-preview';preview.textContent=x.message||'(내용 없음)';preview.title='클릭하여 문의 내용 전체보기';preview.setAttribute('aria-label',String(x.name||'문의자')+'의 문의 내용 전체보기');preview.onclick=()=>openInquiryDetail(x,preview);messageCell.append(preview);
   const stateCell=cell('inq-status','');const badge=document.createElement('span');badge.className='inquiry-status'+(x.status==='done'?' done':'');badge.textContent=x.status==='done'?'확인 완료':'미확인';stateCell.append(badge);
   const actions=cell('inq-actions','');const group=document.createElement('div');group.className='inquiry-action-group';
   const done=document.createElement('button');done.type='button';done.textContent=x.status==='done'?'미확인으로 변경':'확인 완료';done.onclick=()=>changeInquiry(x.id,'status',x.status==='done'?'new':'done');
@@ -420,6 +435,42 @@ function renderInquiries(){
   const next=document.createElement('button');next.type='button';next.textContent='다음';next.disabled=inquiryPage===pages;next.onclick=()=>{inquiryPage++;renderInquiries()};
   pager.append(prev,label,next);
  }
+}
+let inquiryModalReturnFocus=null;
+function closeInquiryDetail(){
+ const overlay=document.getElementById('inquiryDetailOverlay');if(!overlay)return;
+ overlay.remove();document.body.classList.remove('inquiry-modal-open');
+ document.removeEventListener('keydown',inquiryModalKeydown);
+ if(inquiryModalReturnFocus&&inquiryModalReturnFocus.isConnected)inquiryModalReturnFocus.focus();
+ inquiryModalReturnFocus=null;
+}
+function inquiryModalKeydown(e){
+ if(e.key==='Escape'){e.preventDefault();closeInquiryDetail();return}
+ if(e.key==='Tab'){
+  const overlay=document.getElementById('inquiryDetailOverlay');if(!overlay)return;
+  const nodes=[...overlay.querySelectorAll('button,[href],[tabindex]:not([tabindex="-1"])')].filter(n=>!n.disabled);
+  if(!nodes.length)return;
+  const first=nodes[0],last=nodes[nodes.length-1];
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+ }
+}
+function openInquiryDetail(x,trigger){
+ closeInquiryDetail();inquiryModalReturnFocus=trigger;
+ const overlay=document.createElement('div');overlay.id='inquiryDetailOverlay';overlay.className='inquiry-modal-overlay';
+ const modal=document.createElement('section');modal.className='inquiry-modal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-labelledby','inquiryDetailTitle');
+ const header=document.createElement('div');header.className='inquiry-modal-header';
+ const title=document.createElement('h3');title.id='inquiryDetailTitle';title.textContent='문의 내용 전체보기';
+ const close=document.createElement('button');close.type='button';close.className='inquiry-modal-close';close.textContent='닫기 ✕';close.onclick=closeInquiryDetail;header.append(title,close);
+ const body=document.createElement('div');body.className='inquiry-modal-body';
+ const meta=document.createElement('div');meta.className='inquiry-modal-meta';
+ meta.textContent='이름: '+String(x.name||'-')+'  |  연락처: '+String(x.phone||'-')+'\n접수일: '+String(x.created_at||'-').replace('T',' ').replace(/\+09:00$/,'');
+ meta.style.whiteSpace='pre-wrap';
+ const message=document.createElement('p');message.className='inquiry-modal-message';message.textContent=x.message||'(내용 없음)';
+ body.append(meta,message);modal.append(header,body);overlay.append(modal);
+ overlay.addEventListener('click',e=>{if(e.target===overlay)closeInquiryDetail()});
+ document.body.append(overlay);document.body.classList.add('inquiry-modal-open');
+ document.addEventListener('keydown',inquiryModalKeydown);close.focus();
 }
 async function changeInquiry(id,action,status){const msg=document.getElementById('inquiryMsg');try{const tokenResp=await fetch('/api/admin/csrf',{cache:'no-store'});if(!tokenResp.ok)throw Error('보안 토큰을 가져올 수 없습니다.');const token=(await tokenResp.json()).token;const r=await fetch('/api/admin/inquiries/'+id+'/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token},body:JSON.stringify(status?{status}:{})});if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.error||'요청 실패')}await loadInquiries()}catch(e){msg.textContent=e.message}}
 load();</script></body></html>
