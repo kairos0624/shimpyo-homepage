@@ -194,9 +194,29 @@ body{display:flex;min-width:0}
 .inquiry-count{margin:10px 0;color:#617464;font-size:13px}
 @media(max-width:1100px){.inquiry-table{min-width:900px}}
 @media(max-width:650px){.inquiry-table{min-width:850px}}
+
+/* 문의 관리: 검색, 페이지 이동 및 관리 버튼 한 줄 배치 */
+.inquiry-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.inquiry-toolbar label{display:inline-flex;align-items:center;gap:8px}
+.inquiry-toolbar input[type="search"]{width:min(300px,50vw);min-height:40px;padding:8px 11px;border:1px solid #b9cbbb;border-radius:9px;background:#fff;color:#263c2e;font:inherit}
+.inquiry-toolbar input[type="search"]:focus{outline:2px solid #567e61;outline-offset:1px}
+.inquiry-table .inq-number{width:5%}
+.inquiry-table .inq-date{width:16%}
+.inquiry-table .inq-name{width:10%}
+.inquiry-table .inq-phone{width:15%}
+.inquiry-table .inq-message{width:25%}
+.inquiry-table .inq-status{width:10%}
+.inquiry-table .inq-actions{width:19%}
+.inquiry-action-group{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:nowrap}
+.inquiry-table .inq-actions .inquiry-action-group button{margin:0;padding:8px 7px;font-size:12px;line-height:1.2;flex:0 0 auto}
+.inquiry-pagination{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0}
+.inquiry-pagination button{padding:8px 14px;border:1px solid #b9cbbb;border-radius:8px;background:white;color:#304b38;cursor:pointer}
+.inquiry-pagination button:disabled{opacity:.4;cursor:default}
+.inquiry-count{font-size:14px}
+@media(max-width:1100px){.inquiry-table{min-width:940px}}
 </style><style>
 .inquiry-list{display:grid;gap:12px}.inquiry-item{background:white;border:1px solid #dce6dc;border-radius:14px;padding:18px;overflow-wrap:anywhere}.inquiry-item .inquiry-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}.inquiry-item .inquiry-message{white-space:pre-wrap;line-height:1.7;margin:14px 0}.inquiry-item .inquiry-actions{display:flex;gap:8px;flex-wrap:wrap}.inquiry-status{background:#fff0d2;border-radius:14px;padding:4px 10px;font-size:13px}.inquiry-status.done{background:#e4efe4}
-</style></head><body><aside class="sidebar" aria-label="관리자 메뉴"><div class="brand">심리상담 쉼표<small>관리자 대시보드</small></div><nav class="tabs" aria-label="주 메뉴"><button id="tabBookings" class="active" onclick="showTab('bookings')">▦ &nbsp; 예약 관리</button><button id="tabCalendar" onclick="showTab('calendar')">▦ &nbsp; 상담 일정표</button><button id="tabInquiries" onclick="showTab('inquiries')">✉ &nbsp; 문의 관리</button><button id="tabStats" onclick="showTab('stats')">▥ &nbsp; 방문자 통계</button></nav><div class="sidebar-footer"><button onclick="logout()">로그아웃</button></div></aside><div class="content-shell"><header><h1>심리상담 쉼표 · 예약 관리</h1><div>신청 내역 확인 · 승인 · 거절 · 중복 승인 방지</div></header><main><section id="statsView" class="hide"><h2>홈페이지 방문 통계</h2><p class="hint">브라우저 익명 식별값 기준 추정 방문자 · 한국시간 기준 · 실제 수집 이후부터 집계</p><div class="toolbar"><button onclick="loadStats()">통계 새로고침</button><select id="statsRange" onchange="renderStats()"><option value="7">최근 7일</option><option value="30">최근 30일</option></select></div><p id="statsMessage" role="status"></p><div id="statsCards" class="stats"></div><div class="panels visitor-panels"><div class="panel visitor-chart-panel"><h3>일별 방문자 추이</h3><div class="visitor-chart-scroll"><div id="visitorsChart" class="visitor-chart" role="img" aria-label="일별 방문자 수 그래프"></div></div><p id="chartCaption" class="hint"></p></div><div class="panel"><h3>유입 경로</h3><div id="sourceRows"></div></div><div class="panel"><h3>인기 페이지</h3><div id="pageRows"></div></div></div><p class="hint">유입 경로는 참조 사이트 또는 UTM을 기준으로 분류하며, 미확인 방문은 직접·미확인으로 표시합니다. 예약 전환율은 같은 달의 방문자와 신청 건수를 비교한 참고 지표로, 개별 방문자의 예약을 추적하지 않습니다.</p></section><section id="inquiriesView" class="hide"><h2>문의 관리</h2><p class="hint">홈페이지 문의하기에서 접수된 내용을 확인합니다. 새 문의는 카카오톡 알림도 시도합니다.</p><div class="toolbar"><button type="button" onclick="loadInquiries()">문의 새로고침</button><label>상태 <select id="inquiryFilter" onchange="renderInquiries()"><option value="all">전체</option><option value="new">미확인</option><option value="done">확인 완료</option></select></label></div><p id="inquiryMsg" role="status"></p><div id="inquiryList" class="inquiry-list"></div></section><section id="calendarView" class="hide"><h2>상담 일정표</h2><p class="hint">상담 예약 날짜를 기준으로 표시합니다. 날짜를 선택하면 상담 시간과 예약 상세정보를 확인할 수 있습니다.</p><div class="calendar-controls"><button type="button" id="calendarPrev" aria-label="이전 달">‹ 이전 달</button><h3 id="calendarTitle" aria-live="polite"></h3><button type="button" id="calendarToday">이번 달</button><button type="button" id="calendarNext" aria-label="다음 달">다음 달 ›</button><button type="button" onclick="load()">일정 새로고침</button></div><div class="calendar-legend"><span><i class="cal-dot approved"></i>승인 완료</span><span><i class="cal-dot pending"></i>승인 대기</span><span><i class="cal-dot rejected"></i>거절</span></div><div class="calendar-scroll"><div class="calendar-grid" id="calendarGrid" aria-label="월간 상담 예약 달력"></div></div><div class="calendar-details"><h3 id="calendarDayTitle">날짜를 선택해 주세요</h3><div id="calendarDayList" aria-live="polite"></div></div></section><section id="bookingsView"><div class="toolbar"><label class="booking-search-label" for="bookingSearch">예약 검색 <input id="bookingSearch" type="search" placeholder="이름 · 연락처 · 접수번호" autocomplete="off" aria-label="예약자 이름, 연락처 또는 접수번호 검색"></label><button type="button" id="clearBookingSearch" onclick="clearBookingSearch()">검색 초기화</button><label>상태 <select id="filter"><option value="all">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">거절</option></select></label><label>정렬 <select id="sortOrder"><option value="newest">신청일 최신순</option><option value="booking">상담 예약일순</option><option value="oldest">신청일 오래된순</option></select></label><button onclick="load()">새로고침</button><button class="mobile-logout" onclick="logout()">로그아웃</button></div><p id="msg" role="status"></p><div id="cards" class="cards"></div><nav id="pagination" class="pagination" aria-label="예약 목록 페이지"></nav><p id="paginationInfo" class="pagination-info"></p><p class="small">예약 승인·거절은 관리자 화면의 상태 변경입니다. 신청자에게 자동 문자나 이메일은 발송되지 않으므로 별도로 연락해 주세요. 개인정보 보관 기간과 삭제 기준을 정해 운영해 주세요.</p></section></main></div><script>let statsData=null;
+</style></head><body><aside class="sidebar" aria-label="관리자 메뉴"><div class="brand">심리상담 쉼표<small>관리자 대시보드</small></div><nav class="tabs" aria-label="주 메뉴"><button id="tabBookings" class="active" onclick="showTab('bookings')">▦ &nbsp; 예약 관리</button><button id="tabCalendar" onclick="showTab('calendar')">▦ &nbsp; 상담 일정표</button><button id="tabInquiries" onclick="showTab('inquiries')">✉ &nbsp; 문의 관리</button><button id="tabStats" onclick="showTab('stats')">▥ &nbsp; 방문자 통계</button></nav><div class="sidebar-footer"><button onclick="logout()">로그아웃</button></div></aside><div class="content-shell"><header><h1>심리상담 쉼표 · 예약 관리</h1><div>신청 내역 확인 · 승인 · 거절 · 중복 승인 방지</div></header><main><section id="statsView" class="hide"><h2>홈페이지 방문 통계</h2><p class="hint">브라우저 익명 식별값 기준 추정 방문자 · 한국시간 기준 · 실제 수집 이후부터 집계</p><div class="toolbar"><button onclick="loadStats()">통계 새로고침</button><select id="statsRange" onchange="renderStats()"><option value="7">최근 7일</option><option value="30">최근 30일</option></select></div><p id="statsMessage" role="status"></p><div id="statsCards" class="stats"></div><div class="panels visitor-panels"><div class="panel visitor-chart-panel"><h3>일별 방문자 추이</h3><div class="visitor-chart-scroll"><div id="visitorsChart" class="visitor-chart" role="img" aria-label="일별 방문자 수 그래프"></div></div><p id="chartCaption" class="hint"></p></div><div class="panel"><h3>유입 경로</h3><div id="sourceRows"></div></div><div class="panel"><h3>인기 페이지</h3><div id="pageRows"></div></div></div><p class="hint">유입 경로는 참조 사이트 또는 UTM을 기준으로 분류하며, 미확인 방문은 직접·미확인으로 표시합니다. 예약 전환율은 같은 달의 방문자와 신청 건수를 비교한 참고 지표로, 개별 방문자의 예약을 추적하지 않습니다.</p></section><section id="inquiriesView" class="hide"><h2>문의 관리</h2><p class="hint">홈페이지 문의하기에서 접수된 내용을 확인합니다. 새 문의는 카카오톡 알림도 시도합니다.</p><div class="toolbar inquiry-toolbar"><label for="inquirySearch">문의 검색 <input id="inquirySearch" type="search" placeholder="이름 · 연락처 · 문의 내용" autocomplete="off" oninput="inquiryPage=1;renderInquiries()" /></label><button type="button" onclick="document.getElementById('inquirySearch').value='';inquiryPage=1;renderInquiries()">검색 초기화</button><label>상태 <select id="inquiryFilter" onchange="inquiryPage=1;renderInquiries()"><option value="all">전체</option><option value="new">미확인</option><option value="done">확인 완료</option></select></label><button type="button" onclick="loadInquiries()">문의 새로고침</button></div><p id="inquiryMsg" role="status"></p><div id="inquiryList" class="inquiry-list"></div><div id="inquiryPagination" class="inquiry-pagination" aria-label="문의 페이지 이동"></div></section><section id="calendarView" class="hide"><h2>상담 일정표</h2><p class="hint">상담 예약 날짜를 기준으로 표시합니다. 날짜를 선택하면 상담 시간과 예약 상세정보를 확인할 수 있습니다.</p><div class="calendar-controls"><button type="button" id="calendarPrev" aria-label="이전 달">‹ 이전 달</button><h3 id="calendarTitle" aria-live="polite"></h3><button type="button" id="calendarToday">이번 달</button><button type="button" id="calendarNext" aria-label="다음 달">다음 달 ›</button><button type="button" onclick="load()">일정 새로고침</button></div><div class="calendar-legend"><span><i class="cal-dot approved"></i>승인 완료</span><span><i class="cal-dot pending"></i>승인 대기</span><span><i class="cal-dot rejected"></i>거절</span></div><div class="calendar-scroll"><div class="calendar-grid" id="calendarGrid" aria-label="월간 상담 예약 달력"></div></div><div class="calendar-details"><h3 id="calendarDayTitle">날짜를 선택해 주세요</h3><div id="calendarDayList" aria-live="polite"></div></div></section><section id="bookingsView"><div class="toolbar"><label class="booking-search-label" for="bookingSearch">예약 검색 <input id="bookingSearch" type="search" placeholder="이름 · 연락처 · 접수번호" autocomplete="off" aria-label="예약자 이름, 연락처 또는 접수번호 검색"></label><button type="button" id="clearBookingSearch" onclick="clearBookingSearch()">검색 초기화</button><label>상태 <select id="filter"><option value="all">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">거절</option></select></label><label>정렬 <select id="sortOrder"><option value="newest">신청일 최신순</option><option value="booking">상담 예약일순</option><option value="oldest">신청일 오래된순</option></select></label><button onclick="load()">새로고침</button><button class="mobile-logout" onclick="logout()">로그아웃</button></div><p id="msg" role="status"></p><div id="cards" class="cards"></div><nav id="pagination" class="pagination" aria-label="예약 목록 페이지"></nav><p id="paginationInfo" class="pagination-info"></p><p class="small">예약 승인·거절은 관리자 화면의 상태 변경입니다. 신청자에게 자동 문자나 이메일은 발송되지 않으므로 별도로 연락해 주세요. 개인정보 보관 기간과 삭제 기준을 정해 운영해 주세요.</p></section></main></div><script>let statsData=null;
 function showTab(which){const inquiries=which==='inquiries';document.getElementById('inquiriesView').classList.toggle('hide',!inquiries);document.getElementById('tabInquiries').classList.toggle('active',inquiries);const stats=which==='stats',calendar=which==='calendar';document.getElementById('statsView').classList.toggle('hide',!stats);document.getElementById('calendarView').classList.toggle('hide',!calendar);document.getElementById('bookingsView').classList.toggle('hide',stats||calendar||inquiries);document.getElementById('tabStats').classList.toggle('active',stats);document.getElementById('tabCalendar').classList.toggle('active',calendar);document.getElementById('tabBookings').classList.toggle('active',!stats&&!calendar&&!inquiries);document.querySelector('.content-shell').scrollTop=0;if(stats)loadStats();if(calendar)renderCalendar();if(inquiries)loadInquiries()}
 async function loadStats(){const m=document.getElementById('statsMessage');m.textContent='통계를 불러오는 중입니다...';try{const r=await fetch('/api/admin/analytics',{cache:'no-store'});if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw Error('통계 조회 실패');statsData=await r.json();m.textContent='';renderStats()}catch(e){m.textContent='통계를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}}
 function renderStats(){
@@ -348,13 +368,32 @@ document.getElementById('calendarNext').onclick=()=>calShift(1);
 document.getElementById('calendarToday').onclick=()=>{const d=new Date();calYear=d.getFullYear();calMonth=d.getMonth();calSelected=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;renderCalendar()};
 
 let inquiries=[];
+let inquiryPage=1;
+const inquiryPageSize=10;
 async function loadInquiries(){const msg=document.getElementById('inquiryMsg');msg.textContent='문의 내역을 불러오는 중입니다.';try{const r=await fetch('/api/admin/inquiries',{cache:'no-store'});if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw Error('문의 조회 실패');inquiries=await r.json();msg.textContent='';renderInquiries()}catch(e){msg.textContent='문의를 불러오지 못했습니다. 서버 배포 상태를 확인해 주세요.'}}
 function renderInquiries(){
  const root=document.getElementById('inquiryList');root.replaceChildren();
+ const pager=document.getElementById('inquiryPagination');pager.replaceChildren();
  const filter=document.getElementById('inquiryFilter').value;
- const selected=inquiries.filter(x=>filter==='all'||x.status===filter);
- const count=document.createElement('p');count.className='inquiry-count';count.textContent='전체 '+selected.length+'건';root.append(count);
- if(!selected.length){const p=document.createElement('p');p.textContent='해당하는 문의가 없습니다.';root.append(p);return}
+ const query=(document.getElementById('inquirySearch').value||'').trim().toLowerCase();
+ const digits=query.replace(/\D/g,'');
+ const selected=inquiries.filter(x=>{
+  if(filter!=='all'&&x.status!==filter)return false;
+  if(!query)return true;
+  const text=[x.name,x.phone,x.message].map(v=>String(v||'').toLowerCase());
+  return text.some(v=>v.includes(query))||(digits.length>=2&&String(x.phone||'').replace(/\D/g,'').includes(digits));
+ });
+ // 서버의 반환 순서와 무관하게 최신 접수 건부터 표시
+ selected.sort((a,b)=>{
+  const ta=Date.parse(a.created_at||'')||0,tb=Date.parse(b.created_at||'')||0;
+  return tb-ta||(Number(b.id)||0)-(Number(a.id)||0);
+ });
+ const pages=Math.max(1,Math.ceil(selected.length/inquiryPageSize));
+ inquiryPage=Math.min(Math.max(1,inquiryPage),pages);
+ const start=(inquiryPage-1)*inquiryPageSize;
+ const visible=selected.slice(start,start+inquiryPageSize);
+ const count=document.createElement('p');count.className='inquiry-count';count.textContent='검색 결과 '+selected.length+'건 · '+inquiryPage+' / '+pages+'페이지';root.append(count);
+ if(!selected.length){const p=document.createElement('p');p.textContent='조건에 맞는 문의가 없습니다.';root.append(p);return}
  const wrap=document.createElement('div');wrap.className='inquiry-table-wrap';
  const table=document.createElement('table');table.className='inquiry-table';
  const thead=document.createElement('thead'),headRow=document.createElement('tr');
@@ -362,19 +401,25 @@ function renderInquiries(){
  cols.forEach(([label,cls])=>{const th=document.createElement('th');th.scope='col';th.className=cls;th.textContent=label;headRow.append(th)});
  thead.append(headRow);table.append(thead);
  const tbody=document.createElement('tbody');
- selected.forEach((x,i)=>{
+ visible.forEach((x,i)=>{
   const tr=document.createElement('tr');
-  const cell=(cls,text)=>{const td=document.createElement('td');td.className=cls;td.textContent=text;tr.append(td);return td};
-  cell('inq-number',String(selected.length-i));
+  const cell=(cls,value)=>{const td=document.createElement('td');td.className=cls;td.textContent=value;tr.append(td);return td};
+  cell('inq-number',String(selected.length-start-i));
   cell('inq-date',String(x.created_at||'').replace('T',' ').replace(/\+09:00$/,''));
   cell('inq-name',x.name||'');cell('inq-phone',x.phone||'');cell('inq-message',x.message||'');
   const stateCell=cell('inq-status','');const badge=document.createElement('span');badge.className='inquiry-status'+(x.status==='done'?' done':'');badge.textContent=x.status==='done'?'확인 완료':'미확인';stateCell.append(badge);
-  const actions=cell('inq-actions','');
+  const actions=cell('inq-actions','');const group=document.createElement('div');group.className='inquiry-action-group';
   const done=document.createElement('button');done.type='button';done.textContent=x.status==='done'?'미확인으로 변경':'확인 완료';done.onclick=()=>changeInquiry(x.id,'status',x.status==='done'?'new':'done');
   const del=document.createElement('button');del.type='button';del.className='inq-delete';del.textContent='삭제';del.setAttribute('aria-label',x.name+' 문의 개인정보 삭제');del.onclick=()=>{if(confirm('이 문의와 개인정보를 영구 삭제하시겠습니까?'))changeInquiry(x.id,'delete')};
-  actions.append(done,del);tbody.append(tr);
+  group.append(done,del);actions.append(group);tbody.append(tr);
  });
  table.append(tbody);wrap.append(table);root.append(wrap);
+ if(pages>1){
+  const prev=document.createElement('button');prev.type='button';prev.textContent='이전';prev.disabled=inquiryPage===1;prev.onclick=()=>{inquiryPage--;renderInquiries()};
+  const label=document.createElement('span');label.textContent=inquiryPage+' / '+pages+' 페이지';
+  const next=document.createElement('button');next.type='button';next.textContent='다음';next.disabled=inquiryPage===pages;next.onclick=()=>{inquiryPage++;renderInquiries()};
+  pager.append(prev,label,next);
+ }
 }
 async function changeInquiry(id,action,status){const msg=document.getElementById('inquiryMsg');try{const tokenResp=await fetch('/api/admin/csrf',{cache:'no-store'});if(!tokenResp.ok)throw Error('보안 토큰을 가져올 수 없습니다.');const token=(await tokenResp.json()).token;const r=await fetch('/api/admin/inquiries/'+id+'/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token},body:JSON.stringify(status?{status}:{})});if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.error||'요청 실패')}await loadInquiries()}catch(e){msg.textContent=e.message}}
 load();</script></body></html>
