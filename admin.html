@@ -15,9 +15,96 @@ body{display:flex;min-width:0}
 .content-shell header{padding:28px 34px;background:#f8f6ef;border-bottom:1px solid #e5e9df}
 .content-shell main{max-width:1250px;margin:0 auto;padding:26px 34px 70px}
 .mobile-logout{display:none}@media(max-width:700px){.mobile-logout{display:inline-block}html,body{height:100%;overflow:hidden}body{display:flex;flex-direction:column}.sidebar{width:100%;height:auto;flex:0 0 auto;padding:12px 16px;gap:6px;border-right:0;border-bottom:1px solid #d7e1d5}.brand{font-size:17px;padding:2px 4px}.brand small{display:none}.tabs{flex-direction:row;margin:0}.tabs button{width:auto;flex:1;text-align:center;padding:11px 8px}.sidebar-footer{display:none}.content-shell{height:auto;flex:1;min-height:0}.content-shell header{padding:18px}.content-shell header h1{font-size:21px}.content-shell main{padding:18px 14px 48px}.panels{grid-template-columns:1fr}}
-</style></head><body><aside class="sidebar" aria-label="관리자 메뉴"><div class="brand">심리상담 쉼표<small>관리자 대시보드</small></div><nav class="tabs" aria-label="주 메뉴"><button id="tabBookings" class="active" onclick="showTab('bookings')">▦ &nbsp; 예약 관리</button><button id="tabStats" onclick="showTab('stats')">▥ &nbsp; 방문자 통계</button></nav><div class="sidebar-footer"><button onclick="logout()">로그아웃</button></div></aside><div class="content-shell"><header><h1>심리상담 쉼표 · 예약 관리</h1><div>신청 내역 확인 · 승인 · 거절 · 중복 승인 방지</div></header><main><section id="statsView" class="hide"><h2>홈페이지 방문 통계</h2><p class="hint">브라우저 익명 식별값 기준 추정 방문자 · 한국시간 기준 · 실제 수집 이후부터 집계</p><div class="toolbar"><button onclick="loadStats()">통계 새로고침</button><select id="statsRange" onchange="renderStats()"><option value="7">최근 7일</option><option value="30">최근 30일</option></select></div><p id="statsMessage" role="status"></p><div id="statsCards" class="stats"></div><div class="panels"><div class="panel"><h3>일별 방문자</h3><div id="visitorsChart" class="chart"></div><p id="chartCaption" class="hint"></p></div><div class="panel"><h3>유입 경로</h3><div id="sourceRows"></div></div><div class="panel"><h3>인기 페이지</h3><div id="pageRows"></div></div></div><p class="hint">유입 경로는 참조 사이트 또는 UTM을 기준으로 분류하며, 미확인 방문은 직접·미확인으로 표시합니다. 예약 전환율은 같은 달의 방문자와 신청 건수를 비교한 참고 지표로, 개별 방문자의 예약을 추적하지 않습니다.</p></section><section id="bookingsView"><div class="toolbar"><label>상태 <select id="filter"><option value="all">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">거절</option></select></label><label>정렬 <select id="sortOrder"><option value="newest">신청일 최신순</option><option value="booking">상담 예약일순</option><option value="oldest">신청일 오래된순</option></select></label><button onclick="load()">새로고침</button><button class="mobile-logout" onclick="logout()">로그아웃</button></div><p id="msg" role="status"></p><div id="cards" class="cards"></div><p class="small">예약 승인·거절은 관리자 화면의 상태 변경입니다. 신청자에게 자동 문자나 이메일은 발송되지 않으므로 별도로 연락해 주세요. 개인정보 보관 기간과 삭제 기준을 정해 운영해 주세요.</p></section></main></div><script>let statsData=null;
+
+/* Reservation table: keep nine requested columns, scroll horizontally on narrow screens. */
+.reservation-table-wrap{width:100%;overflow-x:auto;border:1px solid #e5e9df;border-radius:15px;background:white;box-shadow:0 4px 18px #243f1a0a}
+.reservation-table{border-collapse:collapse;width:100%;min-width:1120px;font-size:13px}
+.reservation-table th,.reservation-table td{padding:13px 11px;border-bottom:1px solid #e9eee7;text-align:left;vertical-align:middle}
+.reservation-table th{background:#edf2e9;color:#344a38;white-space:nowrap;position:sticky;top:0}
+.reservation-table tr:last-child td{border-bottom:0}
+.reservation-table tr:hover td{background:#fbfcfa}
+.reservation-table td:nth-child(1),.reservation-table td:nth-child(3),.reservation-table td:nth-child(5){white-space:nowrap}
+.reservation-table td:nth-child(n+6){text-align:center;white-space:nowrap}
+.reservation-table th:nth-child(n+6){text-align:center}
+.reservation-table .booking-detail{font-weight:600;line-height:1.5}
+.reservation-table .booking-sub{font-weight:400;color:#617464;font-size:12px}
+.reservation-table .pill{display:inline-block;margin-top:5px;font-size:11px;white-space:nowrap}
+.reservation-table button{font-size:12px;padding:8px 10px;white-space:nowrap}
+.reservation-table button:disabled{opacity:.4;cursor:default}
+.table-scroll-hint{font-size:12px;color:#667265;margin:7px 0}
+@media(min-width:1400px){.content-shell main{max-width:1500px}}
+
+.pagination{display:flex;flex-wrap:wrap;gap:7px;align-items:center;justify-content:center;margin:20px 0 8px}
+.pagination button{min-width:40px;padding:8px 11px}
+.pagination button.active{background:#56765c;color:#fff;border-color:#56765c;font-weight:700}
+.pagination button:disabled{opacity:.4;cursor:default}
+.pagination-info{text-align:center;font-size:13px;color:#667265;margin:4px 0 0}
+</style></head><body><aside class="sidebar" aria-label="관리자 메뉴"><div class="brand">심리상담 쉼표<small>관리자 대시보드</small></div><nav class="tabs" aria-label="주 메뉴"><button id="tabBookings" class="active" onclick="showTab('bookings')">▦ &nbsp; 예약 관리</button><button id="tabStats" onclick="showTab('stats')">▥ &nbsp; 방문자 통계</button></nav><div class="sidebar-footer"><button onclick="logout()">로그아웃</button></div></aside><div class="content-shell"><header><h1>심리상담 쉼표 · 예약 관리</h1><div>신청 내역 확인 · 승인 · 거절 · 중복 승인 방지</div></header><main><section id="statsView" class="hide"><h2>홈페이지 방문 통계</h2><p class="hint">브라우저 익명 식별값 기준 추정 방문자 · 한국시간 기준 · 실제 수집 이후부터 집계</p><div class="toolbar"><button onclick="loadStats()">통계 새로고침</button><select id="statsRange" onchange="renderStats()"><option value="7">최근 7일</option><option value="30">최근 30일</option></select></div><p id="statsMessage" role="status"></p><div id="statsCards" class="stats"></div><div class="panels"><div class="panel"><h3>일별 방문자</h3><div id="visitorsChart" class="chart"></div><p id="chartCaption" class="hint"></p></div><div class="panel"><h3>유입 경로</h3><div id="sourceRows"></div></div><div class="panel"><h3>인기 페이지</h3><div id="pageRows"></div></div></div><p class="hint">유입 경로는 참조 사이트 또는 UTM을 기준으로 분류하며, 미확인 방문은 직접·미확인으로 표시합니다. 예약 전환율은 같은 달의 방문자와 신청 건수를 비교한 참고 지표로, 개별 방문자의 예약을 추적하지 않습니다.</p></section><section id="bookingsView"><div class="toolbar"><label>상태 <select id="filter"><option value="all">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">거절</option></select></label><label>정렬 <select id="sortOrder"><option value="newest">신청일 최신순</option><option value="booking">상담 예약일순</option><option value="oldest">신청일 오래된순</option></select></label><button onclick="load()">새로고침</button><button class="mobile-logout" onclick="logout()">로그아웃</button></div><p id="msg" role="status"></p><div id="cards" class="cards"></div><nav id="pagination" class="pagination" aria-label="예약 목록 페이지"></nav><p id="paginationInfo" class="pagination-info"></p><p class="small">예약 승인·거절은 관리자 화면의 상태 변경입니다. 신청자에게 자동 문자나 이메일은 발송되지 않으므로 별도로 연락해 주세요. 개인정보 보관 기간과 삭제 기준을 정해 운영해 주세요.</p></section></main></div><script>let statsData=null;
 function showTab(which){const stats=which==='stats';document.getElementById('statsView').classList.toggle('hide',!stats);document.getElementById('bookingsView').classList.toggle('hide',stats);document.getElementById('tabStats').classList.toggle('active',stats);document.getElementById('tabBookings').classList.toggle('active',!stats);document.querySelector('.content-shell').scrollTop=0;if(stats)loadStats()}
 async function loadStats(){const m=document.getElementById('statsMessage');m.textContent='통계를 불러오는 중입니다...';try{const r=await fetch('/api/admin/analytics',{cache:'no-store'});if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw Error('통계 조회 실패');statsData=await r.json();m.textContent='';renderStats()}catch(e){m.textContent='통계를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}}
 function renderStats(){if(!statsData)return;const d=statsData,days=d.days.slice(-Number(document.getElementById('statsRange').value));const cards=document.getElementById('statsCards');cards.replaceChildren();const rate=d.month?((d.bookings_month/d.month)*100).toFixed(1)+'%':'—';for(const [name,value] of [['오늘 방문자',d.today+'명'],['어제 방문자',d.yesterday+'명'],['이번 달 방문자',d.month+'명'],['누적 방문자',d.total+'명'],['이번 달 예약 신청',d.bookings_month+'건'],['이번 달 예약 전환 참고율',rate]]){const div=el('div','');div.className='stat';div.append(el('div',name),el('strong',value));cards.append(div)}const chart=document.getElementById('visitorsChart');chart.replaceChildren();const max=Math.max(1,...days.map(x=>x.visitors));for(const x of days){const bar=el('span','');bar.style.height=Math.max(2,100*x.visitors/max)+'%';bar.title=x.date+': '+x.visitors+'명';chart.append(bar)}document.getElementById('chartCaption').textContent=days[0].date+' ~ '+days[days.length-1].date+' (막대에 마우스를 올리면 수치 표시)';drawMetrics('sourceRows',d.sources.map(x=>[x.name,x.count]));drawMetrics('pageRows',d.pages.map(x=>[x.path,x.views]))}
 function drawMetrics(id,items){const root=document.getElementById(id);root.replaceChildren();if(!items.length){root.append(el('p','아직 집계된 기록이 없습니다.'));return}const max=Math.max(1,...items.map(x=>x[1]));for(const [name,count] of items){const line=el('div','');line.className='metric';const label=el('span',name);label.className='name';const bar=el('div','');bar.className='bar';const fill=el('div','');fill.className='fill';fill.style.width=(100*count/max)+'%';bar.append(fill);const num=el('span',String(count));num.className='num';line.append(label,bar,num);root.append(line)}}
-let token='',items=[];const cards=document.getElementById('cards'),msg=document.getElementById('msg');function el(tag,txt){const e=document.createElement(tag);e.textContent=txt;return e}async function load(){try{const [a,b]=await Promise.all([fetch('/api/admin/csrf'),fetch('/api/admin/reservations')]);if(!a.ok||!b.ok){location.href='/admin/login';return}token=(await a.json()).token;items=await b.json();render()}catch(e){msg.textContent='서버 연결을 확인해 주세요.'}}function render(){cards.replaceChildren();const shown=items.filter(x=>document.getElementById('filter').value==='all'||x.status===document.getElementById('filter').value).sort((a,b)=>{const mode=document.getElementById('sortOrder').value;const created=(x)=>Date.parse(x.created_at)||0;const booked=(x)=>String(x.day||'')+' '+String(x.slot||'');if(mode==='booking')return booked(a).localeCompare(booked(b));if(mode==='oldest')return created(a)-created(b);return created(b)-created(a)});msg.textContent='표시된 신청: '+shown.length+'건';shown.forEach(x=>{const card=el('article','');card.className='card';const title=el('h3',x.day+' '+x.slot+' · '+x.program);card.append(title);const line=el('div','접수번호 '+x.receipt+' · '+x.name+' · '+x.phone);line.className='meta';card.append(line);const state=el('span',({pending:'승인 대기',approved:'승인 완료',rejected:'거절'}[x.status]||x.status));state.className='pill';card.append(state);card.append(el('p','신청일: '+x.created_at));const actions=el('div','');actions.className='actions';for(const [value,label] of [['approved','승인'],['rejected','거절'],['pending','대기로 변경']]){const btn=el('button',label);if(value==='approved')btn.className='primary';btn.disabled=x.status===value;btn.onclick=()=>change(x.id,value);actions.append(btn)}const del=el('button','개인정보 삭제');del.className='warn';del.onclick=()=>remove(x.id);actions.append(del);card.append(actions);cards.append(card)});if(!shown.length)cards.append(el('p','표시할 예약 신청이 없습니다.'))}async function action(url){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token},body:JSON.stringify(action.payload||{})});const data=await r.json();if(!r.ok)throw Error(data.error||'처리하지 못했습니다.')}async function change(id,status){if(!confirm('예약 상태를 변경하시겠습니까?'))return;try{action.payload={status};await action('/api/admin/reservations/'+id+'/status');await load()}catch(e){alert(e.message)}}async function remove(id){if(!confirm('이 신청과 개인정보를 영구 삭제하시겠습니까?'))return;try{action.payload={};await action('/api/admin/reservations/'+id+'/delete');await load()}catch(e){alert(e.message)}}async function logout(){action.payload={};await action('/admin/logout');location.href='/admin/login'}document.getElementById('filter').onchange=render;document.getElementById('sortOrder').onchange=render;load();</script></body></html>
+let token='',items=[];const cards=document.getElementById('cards'),msg=document.getElementById('msg');function el(tag,txt){const e=document.createElement(tag);e.textContent=txt;return e}async function load(){try{const [a,b]=await Promise.all([fetch('/api/admin/csrf'),fetch('/api/admin/reservations')]);if(!a.ok||!b.ok){location.href='/admin/login';return}token=(await a.json()).token;items=await b.json();render()}catch(e){msg.textContent='서버 연결을 확인해 주세요.'}}const PAGE_SIZE=10;let currentPage=1;
+function render(){
+ cards.replaceChildren();
+ const shown=items.filter(x=>document.getElementById('filter').value==='all'||x.status===document.getElementById('filter').value).sort((a,b)=>{
+  const mode=document.getElementById('sortOrder').value;
+  const created=x=>String(x.created_at||'');
+  const booked=x=>String(x.day||'')+' '+String(x.slot||'');
+  if(mode==='booking')return booked(a).localeCompare(booked(b))||Number(b.id)-Number(a.id);
+  if(mode==='oldest')return created(a).localeCompare(created(b))||Number(a.id)-Number(b.id);
+  return created(b).localeCompare(created(a))||Number(b.id)-Number(a.id);
+ });
+ const totalPages=Math.max(1,Math.ceil(shown.length/PAGE_SIZE));
+ currentPage=Math.min(Math.max(1,currentPage),totalPages);
+ const start=(currentPage-1)*PAGE_SIZE;
+ const pageItems=shown.slice(start,start+PAGE_SIZE);
+ msg.textContent='전체 '+shown.length+'건 · '+currentPage+' / '+totalPages+'페이지';
+ renderPagination(shown.length,totalPages);
+ if(!shown.length){cards.append(el('p','표시할 예약 신청이 없습니다.'));return}
+ const hint=el('p','화면이 좁으면 표를 좌우로 움직여 확인할 수 있습니다.');hint.className='table-scroll-hint';cards.append(hint);
+ const wrap=el('div','');wrap.className='reservation-table-wrap';wrap.setAttribute('role','region');wrap.setAttribute('aria-label','예약 신청 목록');wrap.tabIndex=0;
+ const table=document.createElement('table');table.className='reservation-table';
+ const head=document.createElement('thead'),headRow=document.createElement('tr');
+ for(const label of ['순번','신청일','상담내용','접수번호','이름','연락처','승인','거절','대기로 변경','개인정보 삭제']){const th=el('th',label);th.scope='col';headRow.append(th)}
+ head.append(headRow);table.append(head);
+ const tbody=document.createElement('tbody');
+ for(const [index,x] of pageItems.entries()){
+  const tr=document.createElement('tr');
+  const addCell=(value)=>{const td=el('td',value);tr.append(td);return td};
+  addCell(String(start+index+1));
+  addCell(String(x.created_at||'').replace('T',' ').slice(0,16));
+  const details=addCell('');
+  const main=el('div',x.program);main.className='booking-detail';
+  const when=el('div',x.day+' '+x.slot);when.className='booking-sub';
+  const state=el('span',({pending:'승인 대기',approved:'승인 완료',rejected:'거절'}[x.status]||x.status));state.className='pill';
+  details.append(main,when,state);
+  addCell(x.receipt);addCell(x.name);addCell(x.phone);
+  for(const [value,label] of [['approved','승인'],['rejected','거절'],['pending','대기로 변경']]){
+   const td=addCell('');const btn=el('button',label);if(value==='approved')btn.className='primary';btn.disabled=x.status===value;btn.onclick=()=>change(x.id,value);td.append(btn);
+  }
+  const delCell=addCell('');const del=el('button','삭제');del.className='warn';del.setAttribute('aria-label',x.name+' 예약 개인정보 삭제');del.onclick=()=>remove(x.id);delCell.append(del);
+  tbody.append(tr);
+ }
+ table.append(tbody);wrap.append(table);cards.append(wrap);
+}
+function renderPagination(total,totalPages){
+ const nav=document.getElementById('pagination');nav.replaceChildren();
+ const info=document.getElementById('paginationInfo');
+ if(!total){info.textContent='';return}
+ const start=(currentPage-1)*PAGE_SIZE+1;
+ info.textContent=start+'~'+Math.min(currentPage*PAGE_SIZE,total)+'번 표시 / 총 '+total+'건';
+ if(totalPages<=1)return;
+ function add(label,page,disabled,active=false){
+  const btn=el('button',label);btn.type='button';btn.disabled=disabled;
+  if(active){btn.className='active';btn.setAttribute('aria-current','page')}
+  btn.onclick=()=>{currentPage=page;render();document.getElementById('bookingsView').scrollIntoView({block:'start',behavior:'auto'})};
+  nav.append(btn);
+ }
+ add('이전',currentPage-1,currentPage===1);
+ const first=Math.max(1,Math.min(currentPage-2,totalPages-4));
+ const last=Math.min(totalPages,first+4);
+ for(let p=first;p<=last;p++)add(String(p),p,false,p===currentPage);
+ add('다음',currentPage+1,currentPage===totalPages);
+}
+async function action(url){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token},body:JSON.stringify(action.payload||{})});const data=await r.json();if(!r.ok)throw Error(data.error||'처리하지 못했습니다.')}async function change(id,status){if(!confirm('예약 상태를 변경하시겠습니까?'))return;try{action.payload={status};await action('/api/admin/reservations/'+id+'/status');await load()}catch(e){alert(e.message)}}async function remove(id){if(!confirm('이 신청과 개인정보를 영구 삭제하시겠습니까?'))return;try{action.payload={};await action('/api/admin/reservations/'+id+'/delete');await load()}catch(e){alert(e.message)}}async function logout(){action.payload={};await action('/admin/logout');location.href='/admin/login'}document.getElementById('filter').onchange=()=>{currentPage=1;render()};document.getElementById('sortOrder').onchange=()=>{currentPage=1;render()};load();</script></body></html>
