@@ -83,6 +83,13 @@ body{display:flex;min-width:0}
 .visitor-date{font-size:11px;color:#617464;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(max-width:700px){.content-shell main{padding-left:12px;padding-right:12px}}
 
+/* Visitor trend: responsive, no nested vertical scrollbar */
+.visitor-chart-scroll{overflow-x:hidden;overflow-y:hidden;padding:0;width:100%;max-width:100%}
+#visitorsChart.visitor-chart{display:block;min-width:0;width:100%;height:auto;min-height:0;padding:0;overflow:visible;border:0}
+#visitorsChart.visitor-chart svg{display:block;width:100%;height:auto;max-width:100%;font-family:system-ui,-apple-system,sans-serif}
+.visitor-chart-scroll.is-30-days{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.visitor-chart-scroll.is-30-days #visitorsChart.visitor-chart{width:max-content;min-width:100%}
+.visitor-chart-scroll.is-30-days #visitorsChart.visitor-chart svg{width:auto;max-width:none}
 /* Naver-inspired wide visitor trend graph */
 .visitor-panels{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .visitor-chart-panel{grid-column:1/-1}
@@ -109,7 +116,9 @@ function renderStats(){
 function drawVisitorLine(days){
  const root=document.getElementById('visitorsChart');root.replaceChildren();
  if(!days.length){document.getElementById('chartCaption').textContent='집계된 날짜가 없습니다.';return}
- const n=days.length, width=Math.max(680,n*42),height=290;
+ const n=days.length, width=n>7?Math.max(1000,n*42):760,height=290;
+ const scroller=root.closest('.visitor-chart-scroll');
+ if(scroller){scroller.classList.toggle('is-30-days',n>7);scroller.scrollLeft=0;}
  const left=42,right=18,top=35,bottom=49,plotW=width-left-right,plotH=height-top-bottom;
  const values=days.map(x=>Number(x.visitors)||0),largest=Math.max(1,...values);
  const ceiling=largest<=4?4:Math.ceil(largest/4)*4;
@@ -135,7 +144,7 @@ function drawVisitorLine(days){
   const tooltip=document.createElementNS(NS,'title');tooltip.textContent=d.date+' 방문자 '+values[i]+'명';count.append(tooltip);
  });
  root.append(svg);
- document.getElementById('chartCaption').textContent=days[0].date+' ~ '+days[n-1].date+' · 날짜별 방문자 수 (30일 선택 시 좌우 스크롤)';
+ document.getElementById('chartCaption').textContent=days[0].date+' ~ '+days[n-1].date+' · 날짜별 방문자 수'+(n>7?' (좌우로 이동해 전체 날짜 확인)':'');
 }
 function drawMetrics(id,items){const root=document.getElementById(id);root.replaceChildren();if(!items.length){root.append(el('p','아직 집계된 기록이 없습니다.'));return}const max=Math.max(1,...items.map(x=>x[1]));for(const [name,count] of items){const line=el('div','');line.className='metric';const label=el('span',name);label.className='name';const bar=el('div','');bar.className='bar';const fill=el('div','');fill.className='fill';fill.style.width=(100*count/max)+'%';bar.append(fill);const num=el('span',String(count));num.className='num';line.append(label,bar,num);root.append(line)}}
 let token='',items=[];const cards=document.getElementById('cards'),msg=document.getElementById('msg');function el(tag,txt){const e=document.createElement(tag);e.textContent=txt;return e}async function load(){try{const [a,b]=await Promise.all([fetch('/api/admin/csrf'),fetch('/api/admin/reservations')]);if(!a.ok||!b.ok){location.href='/admin/login';return}token=(await a.json()).token;items=await b.json();render()}catch(e){msg.textContent='서버 연결을 확인해 주세요.'}}const PAGE_SIZE=10;let currentPage=1;
