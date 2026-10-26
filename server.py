@@ -1,0 +1,135 @@
+"""심리상담 쉼표 예약 관리 서버. 운영 시 HTTPS 역방향 프록시 및 환경변수 필수."""
+import os, re, sqlite3, secrets, time
+from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
+KST=ZoneInfo("Asia/Seoul")
+def local_today(): return datetime.now(KST).date()
+def local_now(): return datetime.now(KST).isoformat(timespec="seconds")
+from pathlib import Path
+from functools import wraps
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, abort
+from werkzeug.security import check_password_hash, generate_password_hash
+
+BASE=Path(__file__).resolve().parent
+DB=Path(os.environ.get('SHIMPYO_DB_PATH', str(BASE/'private'/'reservations.sqlite3'))).resolve()
+ADMIN_PASSWORD=os.environ.get('SHIMPYO_ADMIN_PASSWORD','')
+SECRET=os.environ.get('SHIMPYO_SECRET_KEY','')
+if not ADMIN_PASSWORD or not SECRET or len(SECRET)<32:
+    raise RuntimeError('운영 전 SHIMPYO_ADMIN_PASSWORD 와 32자 이상 SHIMPYO_SECRET_KEY 를 설정하세요.')
+app=Flask(__name__,static_folder=None)
+app.config.update(SECRET_KEY=SECRET,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',SESSION_COOKIE_SECURE=os.environ.get('SHIMPYO_COOKIE_SECURE','1')=='1',PERMANENT_SESSION_LIFETIME=timedelta(hours=8),MAX_CONTENT_LENGTH=8192)
+PASSWORD_HASH=generate_password_hash(ADMIN_PASSWORD)
+PROGRAMS=['성인 심리상담','커플·부부·가족 상담','아동·청소년 상담','심리검사','노인 심리상담','집단상담','진로상담','기타 상담']
+DB.parent.mkdir(parents=True,exist_ok=True)
+def db():
+ c=sqlite3.connect(str(DB),timeout=10);c.row_factory=sqlite3.Row;c.execute('PRAGMA busy_timeout=10000');return c
+with db() as c:
+ c.executescript("""CREATE TABLE IF NOT EXISTS reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, receipt TEXT UNIQUE NOT NULL, name TEXT NOT NULL, phone TEXT NOT NULL, program TEXT NOT NULL, day TEXT NOT NULL, slot TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);CREATE UNIQUE INDEX IF NOT EXISTS one_approved_per_slot ON reservations(day,slot) WHERE status='approved';CREATE INDEX IF NOT EXISTS reservations_by_day ON reservations(day,slot);""")
+# In-memory rate limits apply per process; add proxy/WAF limits in production.
+_recent={}
+def rate_ok(key,limit,window):
+ now=time.monotonic(); entries=[t for t in _recent.get(key,[]) if now-t<window]
+ if len(entries)>=limit:return False
+ entries.append(now);_recent[key]=entries
+ if len(_recent)>10000:_recent.clear()
+ return True
+
+def valid_slot(day,slot):
+ try:d=date.fromisoformat(day)
+ except (ValueError,TypeError):return False
+ if d<local_today() or d>local_today()+timedelta(days=180):return False
+ if not isinstance(slot,str) or not re.fullmatch(r'\d{2}:00',slot):return False
+ hour=int(slot[:2]);return d.weekday()!=6 and ((10<=hour<=21) if d.weekday()<5 else (13<=hour<=21))
+
+@app.after_request
+def secure(resp):
+ resp.headers['X-Content-Type-Options']='nosniff';resp.headers['Content-Security-Policy']="frame-ancestors 'none'; base-uri 'self'; object-src 'none'";resp.headers['X-Frame-Options']='DENY';resp.headers['Referrer-Policy']='strict-origin-when-cross-origin';resp.headers['Cache-Control']='no-store' if request.path.startswith('/admin') or request.path.startswith('/api') else 'no-cache'
+ return resp
+
+@app.post('/api/reservations')
+def create():
+ ip=request.remote_addr or 'unknown'
+ if not rate_ok('reserve:'+ip,8,3600):return jsonify(error='신청 횟수가 많습니다. 잠시 후 다시 시도해 주세요.'),429
+ data=request.get_json(silent=True)
+ if not isinstance(data,dict):return jsonify(error='신청 정보를 확인해 주세요.'),400
+ name=str(data.get('name','')).strip();phone=str(data.get('phone','')).strip();program=data.get('program');day=data.get('date');slot=data.get('time')
+ if not 1<=len(name)<=50 or not re.fullmatch(r'[0-9+()\- ]{9,20}',phone) or program not in PROGRAMS or not valid_slot(day,slot) or data.get('consent') is not True:return jsonify(error='성함, 연락처, 상담 종류, 희망 일정과 개인정보 동의를 확인해 주세요.'),400
+ with db() as c:
+  if c.execute('SELECT 1 FROM reservations WHERE day=? AND slot=? AND status=?',(day,slot,'approved')).fetchone():return jsonify(error='이미 확정된 시간입니다. 다른 시간을 선택해 주세요.'),409
+  receipt=secrets.token_hex(5).upper();now=local_now()
+  c.execute('INSERT INTO reservations(receipt,name,phone,program,day,slot,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(receipt,name,phone,program,day,slot,now,now))
+ return jsonify(receipt=receipt,status='pending'),201
+
+def admin_required(fn):
+ @wraps(fn)
+ def wrapped(*a,**kw):
+  if not session.get('admin'):return redirect('/admin/login') if request.method=='GET' else (jsonify(error='로그인이 필요합니다.'),401)
+  return fn(*a,**kw)
+ return wrapped
+
+def csrf_ok():return secrets.compare_digest(str(session.get('csrf','')),str(request.headers.get('X-CSRF-Token',''))) and bool(session.get('csrf'))
+
+LOGIN="""<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>쉼표 관리자 로그인</title><style>body{font-family:system-ui;background:#f7f5ee;color:#3d5341;display:grid;place-items:center;min-height:90vh}form{background:white;padding:35px;border-radius:22px;box-shadow:0 12px 35px #263b2114}input,button{padding:12px;border-radius:10px;font:inherit}button{background:#55735b;color:white;border:0}</style><form method="post"><h2>쉼표 예약 관리</h2><p>센터 관리자 전용</p><input type="password" name="password" required placeholder="관리자 비밀번호" autocomplete="current-password"><button>로그인</button><p style="color:#a24a3d">{{error}}</p></form></html>"""
+@app.route('/admin/login',methods=['GET','POST'])
+def login():
+ error=''
+ if request.method=='POST':
+  if not rate_ok('login:'+(request.remote_addr or 'unknown'),10,900):error='잠시 후 다시 시도해 주세요.'
+  elif check_password_hash(PASSWORD_HASH,request.form.get('password','')):
+   session.clear();session['admin']=True;session['csrf']=secrets.token_urlsafe(32);return redirect('/admin')
+  else:error='비밀번호를 확인해 주세요.'
+ return render_template_string(LOGIN,error=error)
+
+@app.get('/admin')
+@admin_required
+def admin():return send_from_directory(str(BASE),'admin.html')
+@app.get('/api/admin/reservations')
+@admin_required
+def list_reservations():
+ with db() as c:rows=c.execute('SELECT id,receipt,name,phone,program,day,slot,status,created_at FROM reservations ORDER BY day DESC,slot DESC,id DESC LIMIT 500').fetchall()
+ return jsonify([dict(r) for r in rows])
+@app.post('/api/admin/reservations/<int:rid>/status')
+@admin_required
+def change_status(rid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ data=request.get_json(silent=True) or {};status=data.get('status')
+ if status not in ('approved','rejected','pending'):return jsonify(error='잘못된 상태입니다.'),400
+ try:
+  with db() as c:
+   c.execute('BEGIN IMMEDIATE')
+   r=c.execute('SELECT id,day,slot FROM reservations WHERE id=?',(rid,)).fetchone()
+   if not r:return jsonify(error='신청을 찾을 수 없습니다.'),404
+   if status=='approved' and c.execute('SELECT 1 FROM reservations WHERE day=? AND slot=? AND status=? AND id!=?',(r['day'],r['slot'],'approved',rid)).fetchone():return jsonify(error='해당 시간은 이미 다른 예약이 승인되었습니다.'),409
+   c.execute('UPDATE reservations SET status=?,updated_at=? WHERE id=?',(status,local_now(),rid))
+ except sqlite3.IntegrityError:return jsonify(error='중복 승인할 수 없습니다.'),409
+ return jsonify(ok=True,status=status)
+@app.post('/api/admin/reservations/<int:rid>/delete')
+@admin_required
+def delete(rid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ with db() as c:c.execute('DELETE FROM reservations WHERE id=?',(rid,))
+ return jsonify(ok=True)
+@app.get('/api/admin/csrf')
+@admin_required
+def csrf():return jsonify(token=session['csrf'])
+@app.post('/admin/logout')
+@admin_required
+def logout():
+ if not csrf_ok():abort(403)
+ session.clear();return jsonify(ok=True)
+@app.get('/healthz')
+def healthz():
+ try:
+  with db() as c: c.execute('SELECT 1').fetchone()
+  return jsonify(status='ok'),200
+ except sqlite3.Error:
+  return jsonify(status='unavailable'),503
+@app.get('/')
+def home():return send_from_directory(str(BASE),'index.html')
+@app.get('/<path:filename>')
+def static_pages(filename):
+ if filename in ('server.py','requirements.txt','admin.html','README.txt','SETUP.md') or filename.startswith(('private/','.')):abort(404)
+ if not (filename.endswith('.html') or filename.endswith('.css') or filename.endswith('.js') or filename.startswith('assets/')):abort(404)
+ return send_from_directory(str(BASE),filename)
+if __name__=='__main__':
+ app.run(host='127.0.0.1',port=8000,debug=False)

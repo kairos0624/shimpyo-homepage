@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: shimpyo-reservations
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60 server:app
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SHIMPYO_DB_PATH
+        value: /var/data/reservations.sqlite3
+      - key: SHIMPYO_COOKIE_SECURE
+        value: "1"
+      - key: SHIMPYO_SECRET_KEY
+        generateValue: true
+      - key: SHIMPYO_ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: shimpyo-private-data
+      mountPath: /var/data
+      sizeGB: 1
