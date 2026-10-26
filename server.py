@@ -1,5 +1,5 @@
 """심리상담 쉼표 예약 관리 서버. 운영 시 HTTPS 역방향 프록시 및 환경변수 필수."""
-import os, re, sqlite3, secrets, time
+import os, re, sqlite3, secrets, time, json, urllib.parse, urllib.request, urllib.error, logging
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 KST=ZoneInfo("Asia/Seoul")
@@ -14,6 +14,8 @@ BASE=Path(__file__).resolve().parent
 DB=Path(os.environ.get('SHIMPYO_DB_PATH', str(BASE/'private'/'reservations.sqlite3'))).resolve()
 ADMIN_PASSWORD=os.environ.get('SHIMPYO_ADMIN_PASSWORD','')
 SECRET=os.environ.get('SHIMPYO_SECRET_KEY','')
+KAKAO_REST_KEY=os.environ.get('SHIMPYO_KAKAO_REST_KEY','').strip()
+KAKAO_REDIRECT_URI=os.environ.get('SHIMPYO_KAKAO_REDIRECT_URI','https://shimpyo-homepage.onrender.com/auth/kakao/callback').strip()
 if not ADMIN_PASSWORD or not SECRET or len(SECRET)<32:
     raise RuntimeError('운영 전 SHIMPYO_ADMIN_PASSWORD 와 32자 이상 SHIMPYO_SECRET_KEY 를 설정하세요.')
 app=Flask(__name__,static_folder=None)
@@ -25,6 +27,38 @@ def db():
  c=sqlite3.connect(str(DB),timeout=10);c.row_factory=sqlite3.Row;c.execute('PRAGMA busy_timeout=10000');return c
 with db() as c:
  c.executescript("""CREATE TABLE IF NOT EXISTS reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, receipt TEXT UNIQUE NOT NULL, name TEXT NOT NULL, phone TEXT NOT NULL, program TEXT NOT NULL, day TEXT NOT NULL, slot TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);CREATE UNIQUE INDEX IF NOT EXISTS one_approved_per_slot ON reservations(day,slot) WHERE status='approved';CREATE INDEX IF NOT EXISTS reservations_by_day ON reservations(day,slot);""")
+# 카카오 OAuth 토큰은 현재 SQLite에 저장됩니다. Render Free 재배포 시 소실될 수 있습니다.
+with db() as c:
+ c.execute("CREATE TABLE IF NOT EXISTS kakao_auth (id INTEGER PRIMARY KEY CHECK(id=1), access_token TEXT NOT NULL, refresh_token TEXT NOT NULL, expires_at INTEGER NOT NULL)")
+
+def kakao_post(url, fields, access_token=None):
+ payload=urllib.parse.urlencode(fields).encode('utf-8')
+ headers={'Content-Type':'application/x-www-form-urlencoded;charset=utf-8'}
+ if access_token:headers['Authorization']='Bearer '+access_token
+ req=urllib.request.Request(url,data=payload,headers=headers,method='POST')
+ with urllib.request.urlopen(req,timeout=4) as resp:return json.loads(resp.read().decode('utf-8'))
+
+def kakao_token():
+ with db() as c:
+  row=c.execute('SELECT access_token,refresh_token,expires_at FROM kakao_auth WHERE id=1').fetchone()
+ if not row:return None
+ if row['expires_at']>int(time.time())+120:return row['access_token']
+ if not KAKAO_REST_KEY:return None
+ result=kakao_post('https://kauth.kakao.com/oauth/token',{'grant_type':'refresh_token','client_id':KAKAO_REST_KEY,'refresh_token':row['refresh_token']})
+ access=result['access_token'];refresh=result.get('refresh_token',row['refresh_token'])
+ with db() as c:c.execute('UPDATE kakao_auth SET access_token=?,refresh_token=?,expires_at=? WHERE id=1',(access,refresh,int(time.time())+int(result.get('expires_in',21600))))
+ return access
+
+def notify_kakao(day,slot):
+ try:
+  token=kakao_token()
+  if not token:return
+  message={'object_type':'text','text':f'[쉼표 예약 접수]\n{day} {slot}\n새 예약이 접수되었습니다. 관리자 페이지에서 확인해 주세요.','link':{'web_url':'https://shimpyo-homepage.onrender.com/admin','mobile_web_url':'https://shimpyo-homepage.onrender.com/admin'}}
+  result=kakao_post('https://kapi.kakao.com/v2/api/talk/memo/default/send',{'template_object':json.dumps(message,ensure_ascii=False)},token)
+  if result.get('result_code')!=0:app.logger.warning('카카오 알림 전송 결과 확인 필요')
+ except (urllib.error.URLError,ValueError,KeyError,sqlite3.Error,TimeoutError) as exc:
+  app.logger.warning('카카오 알림 실패 (%s)',type(exc).__name__)
+
 # In-memory rate limits apply per process; add proxy/WAF limits in production.
 _recent={}
 def rate_ok(key,limit,window):
@@ -58,6 +92,7 @@ def create():
   if c.execute('SELECT 1 FROM reservations WHERE day=? AND slot=? AND status=?',(day,slot,'approved')).fetchone():return jsonify(error='이미 확정된 시간입니다. 다른 시간을 선택해 주세요.'),409
   receipt=secrets.token_hex(5).upper();now=local_now()
   c.execute('INSERT INTO reservations(receipt,name,phone,program,day,slot,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(receipt,name,phone,program,day,slot,now,now))
+ notify_kakao(day,slot)
  return jsonify(receipt=receipt,status='pending'),201
 
 def admin_required(fn):
@@ -79,6 +114,31 @@ def login():
    session.clear();session['admin']=True;session['csrf']=secrets.token_urlsafe(32);return redirect('/admin')
   else:error='비밀번호를 확인해 주세요.'
  return render_template_string(LOGIN,error=error)
+
+@app.get('/admin/kakao/connect')
+@admin_required
+def kakao_connect():
+ if not KAKAO_REST_KEY:return 'Render에 SHIMPYO_KAKAO_REST_KEY를 먼저 설정해 주세요.',503
+ state=secrets.token_urlsafe(32)
+ session['kakao_oauth_state']=state
+ params={'client_id':KAKAO_REST_KEY,'redirect_uri':KAKAO_REDIRECT_URI,'response_type':'code','state':state,'scope':'talk_message'}
+ return redirect('https://kauth.kakao.com/oauth/authorize?'+urllib.parse.urlencode(params))
+
+@app.get('/auth/kakao/callback')
+def kakao_callback():
+ state=request.args.get('state','')
+ expected=session.pop('kakao_oauth_state',None)
+ if not expected or not secrets.compare_digest(state,expected) or not session.get('admin'):abort(403)
+ code=request.args.get('code','')
+ if not code:return '카카오 연결이 취소되었거나 인증 코드를 받지 못했습니다.',400
+ try:
+  result=kakao_post('https://kauth.kakao.com/oauth/token',{'grant_type':'authorization_code','client_id':KAKAO_REST_KEY,'redirect_uri':KAKAO_REDIRECT_URI,'code':code})
+  access=result['access_token'];refresh=result['refresh_token']
+  with db() as c:c.execute('INSERT INTO kakao_auth(id,access_token,refresh_token,expires_at) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET access_token=excluded.access_token,refresh_token=excluded.refresh_token,expires_at=excluded.expires_at',(access,refresh,int(time.time())+int(result.get('expires_in',21600))))
+ except (urllib.error.URLError,ValueError,KeyError,sqlite3.Error,TimeoutError) as exc:
+  app.logger.warning('카카오 계정 연결 실패 (%s)',type(exc).__name__)
+  return '카카오 계정 연결에 실패했습니다. 카카오 로그인 설정과 메시지 권한을 확인해 주세요.',502
+ return '카카오 계정 연결 완료! 이제 테스트 예약을 접수하면 연결된 계정의 나와의 채팅으로 알림을 시도합니다.'
 
 @app.get('/admin')
 @admin_required
