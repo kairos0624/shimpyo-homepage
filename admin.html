@@ -39,6 +39,21 @@ body{display:flex;min-width:0}
 .pagination button.active{background:#56765c;color:#fff;border-color:#56765c;font-weight:700}
 .pagination button:disabled{opacity:.4;cursor:default}
 .pagination-info{text-align:center;font-size:13px;color:#667265;margin:4px 0 0}
+
+/* Readable compact reservation list */
+.content-shell main{max-width:1540px;padding-left:20px;padding-right:20px}
+.reservation-table{min-width:1190px;font-size:14px;line-height:1.45}
+.reservation-table th,.reservation-table td{padding:12px 7px}
+.reservation-table th{font-size:14px;font-weight:700}
+.reservation-table td{font-size:14px;color:#344a38}
+.reservation-table .booking-detail{font-size:14px;font-weight:700}
+.reservation-table .booking-sub{font-size:13px;color:#526b56}
+.reservation-table .pill{font-size:12px;padding:4px 8px}
+.reservation-table button{font-size:13px;padding:8px 9px}
+.reservation-table td:nth-child(2),.reservation-table td:nth-child(6){font-variant-numeric:tabular-nums}
+.reservation-table th:first-child,.reservation-table td:first-child{padding-left:10px}
+.reservation-table th:last-child,.reservation-table td:last-child{padding-right:10px}
+@media(max-width:700px){.content-shell main{padding-left:12px;padding-right:12px}}
 </style></head><body><aside class="sidebar" aria-label="관리자 메뉴"><div class="brand">심리상담 쉼표<small>관리자 대시보드</small></div><nav class="tabs" aria-label="주 메뉴"><button id="tabBookings" class="active" onclick="showTab('bookings')">▦ &nbsp; 예약 관리</button><button id="tabStats" onclick="showTab('stats')">▥ &nbsp; 방문자 통계</button></nav><div class="sidebar-footer"><button onclick="logout()">로그아웃</button></div></aside><div class="content-shell"><header><h1>심리상담 쉼표 · 예약 관리</h1><div>신청 내역 확인 · 승인 · 거절 · 중복 승인 방지</div></header><main><section id="statsView" class="hide"><h2>홈페이지 방문 통계</h2><p class="hint">브라우저 익명 식별값 기준 추정 방문자 · 한국시간 기준 · 실제 수집 이후부터 집계</p><div class="toolbar"><button onclick="loadStats()">통계 새로고침</button><select id="statsRange" onchange="renderStats()"><option value="7">최근 7일</option><option value="30">최근 30일</option></select></div><p id="statsMessage" role="status"></p><div id="statsCards" class="stats"></div><div class="panels"><div class="panel"><h3>일별 방문자</h3><div id="visitorsChart" class="chart"></div><p id="chartCaption" class="hint"></p></div><div class="panel"><h3>유입 경로</h3><div id="sourceRows"></div></div><div class="panel"><h3>인기 페이지</h3><div id="pageRows"></div></div></div><p class="hint">유입 경로는 참조 사이트 또는 UTM을 기준으로 분류하며, 미확인 방문은 직접·미확인으로 표시합니다. 예약 전환율은 같은 달의 방문자와 신청 건수를 비교한 참고 지표로, 개별 방문자의 예약을 추적하지 않습니다.</p></section><section id="bookingsView"><div class="toolbar"><label>상태 <select id="filter"><option value="all">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">거절</option></select></label><label>정렬 <select id="sortOrder"><option value="newest">신청일 최신순</option><option value="booking">상담 예약일순</option><option value="oldest">신청일 오래된순</option></select></label><button onclick="load()">새로고침</button><button class="mobile-logout" onclick="logout()">로그아웃</button></div><p id="msg" role="status"></p><div id="cards" class="cards"></div><nav id="pagination" class="pagination" aria-label="예약 목록 페이지"></nav><p id="paginationInfo" class="pagination-info"></p><p class="small">예약 승인·거절은 관리자 화면의 상태 변경입니다. 신청자에게 자동 문자나 이메일은 발송되지 않으므로 별도로 연락해 주세요. 개인정보 보관 기간과 삭제 기준을 정해 운영해 주세요.</p></section></main></div><script>let statsData=null;
 function showTab(which){const stats=which==='stats';document.getElementById('statsView').classList.toggle('hide',!stats);document.getElementById('bookingsView').classList.toggle('hide',stats);document.getElementById('tabStats').classList.toggle('active',stats);document.getElementById('tabBookings').classList.toggle('active',!stats);document.querySelector('.content-shell').scrollTop=0;if(stats)loadStats()}
 async function loadStats(){const m=document.getElementById('statsMessage');m.textContent='통계를 불러오는 중입니다...';try{const r=await fetch('/api/admin/analytics',{cache:'no-store'});if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw Error('통계 조회 실패');statsData=await r.json();m.textContent='';renderStats()}catch(e){m.textContent='통계를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}}
