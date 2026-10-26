@@ -135,6 +135,10 @@ def kakao_callback():
   result=kakao_post('https://kauth.kakao.com/oauth/token',{'grant_type':'authorization_code','client_id':KAKAO_REST_KEY,'redirect_uri':KAKAO_REDIRECT_URI,'code':code})
   access=result['access_token'];refresh=result['refresh_token']
   with db() as c:c.execute('INSERT INTO kakao_auth(id,access_token,refresh_token,expires_at) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET access_token=excluded.access_token,refresh_token=excluded.refresh_token,expires_at=excluded.expires_at',(access,refresh,int(time.time())+int(result.get('expires_in',21600))))
+ except urllib.error.HTTPError as exc:
+  # Never log request URLs, authorization codes, tokens, or response bodies.
+  app.logger.warning('카카오 토큰 요청 실패: HTTP %s (설정된 Redirect URI 및 REST API 키 확인)',exc.code)
+  return '카카오 인증 서버에서 요청을 거절했습니다 (HTTP {}). Render 로그의 상태 코드를 확인해 주세요.'.format(exc.code),502
  except (urllib.error.URLError,ValueError,KeyError,sqlite3.Error,TimeoutError) as exc:
   app.logger.warning('카카오 계정 연결 실패 (%s)',type(exc).__name__)
   return '카카오 계정 연결에 실패했습니다. 카카오 로그인 설정과 메시지 권한을 확인해 주세요.',502
