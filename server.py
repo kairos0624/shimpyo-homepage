@@ -1,8 +1,5 @@
 """심리상담 쉼표 예약 관리 서버. 운영 시 HTTPS 역방향 프록시 및 환경변수 필수."""
-import os, re, sqlite3, secrets, time, json, logging
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+import os, re, sqlite3, secrets, time
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 KST=ZoneInfo("Asia/Seoul")
@@ -22,16 +19,12 @@ if not ADMIN_PASSWORD or not SECRET or len(SECRET)<32:
 app=Flask(__name__,static_folder=None)
 app.config.update(SECRET_KEY=SECRET,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',SESSION_COOKIE_SECURE=os.environ.get('SHIMPYO_COOKIE_SECURE','1')=='1',PERMANENT_SESSION_LIFETIME=timedelta(hours=8),MAX_CONTENT_LENGTH=8192)
 PASSWORD_HASH=generate_password_hash(ADMIN_PASSWORD)
-KAKAO_REST_KEY=os.environ.get('SHIMPYO_KAKAO_REST_KEY','')
-KAKAO_CLIENT_SECRET=os.environ.get('SHIMPYO_KAKAO_CLIENT_SECRET','')
-KAKAO_CALLBACK='https://shimpyo-homepage.onrender.com/auth/kakao/callback'
 PROGRAMS=['성인 심리상담','커플·부부·가족 상담','아동·청소년 상담','심리검사','노인 심리상담','집단상담','진로상담','기타 상담']
 DB.parent.mkdir(parents=True,exist_ok=True)
 def db():
  c=sqlite3.connect(str(DB),timeout=10);c.row_factory=sqlite3.Row;c.execute('PRAGMA busy_timeout=10000');return c
 with db() as c:
  c.executescript("""CREATE TABLE IF NOT EXISTS reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, receipt TEXT UNIQUE NOT NULL, name TEXT NOT NULL, phone TEXT NOT NULL, program TEXT NOT NULL, day TEXT NOT NULL, slot TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);CREATE UNIQUE INDEX IF NOT EXISTS one_approved_per_slot ON reservations(day,slot) WHERE status='approved';CREATE INDEX IF NOT EXISTS reservations_by_day ON reservations(day,slot);""")
- c.execute("CREATE TABLE IF NOT EXISTS kakao_auth (id INTEGER PRIMARY KEY CHECK(id=1), access_token TEXT NOT NULL, refresh_token TEXT NOT NULL, expires_at INTEGER NOT NULL)")
 # In-memory rate limits apply per process; add proxy/WAF limits in production.
 _recent={}
 def rate_ok(key,limit,window):
@@ -65,59 +58,7 @@ def create():
   if c.execute('SELECT 1 FROM reservations WHERE day=? AND slot=? AND status=?',(day,slot,'approved')).fetchone():return jsonify(error='이미 확정된 시간입니다. 다른 시간을 선택해 주세요.'),409
   receipt=secrets.token_hex(5).upper();now=local_now()
   c.execute('INSERT INTO reservations(receipt,name,phone,program,day,slot,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(receipt,name,phone,program,day,slot,now,now))
- try:
-  kakao_notify(day,slot)
- except Exception:
-  app.logger.exception('카카오 예약 알림 전송 실패 (예약은 접수됨)')
  return jsonify(receipt=receipt,status='pending'),201
-
-def kakao_http(url, payload, bearer=None):
- headers={'Content-Type':'application/x-www-form-urlencoded;charset=utf-8'}
- if bearer:headers['Authorization']='Bearer '+bearer
- req=Request(url,data=urlencode(payload).encode('utf-8'),headers=headers,method='POST')
- with urlopen(req,timeout=4) as response:return json.load(response)
-
-def kakao_token_params():
- p={'client_id':KAKAO_REST_KEY}
- if KAKAO_CLIENT_SECRET:p['client_secret']=KAKAO_CLIENT_SECRET
- return p
-
-def kakao_notify(day,slot):
- if not KAKAO_REST_KEY:return
- with db() as c:row=c.execute('SELECT access_token,refresh_token,expires_at FROM kakao_auth WHERE id=1').fetchone()
- if not row:return
- token=row['access_token']
- if time.time()+60>=row['expires_at']:
-  updated=kakao_http('https://kauth.kakao.com/oauth/token',dict(kakao_token_params(),grant_type='refresh_token',refresh_token=row['refresh_token']))
-  token=updated['access_token']
-  with db() as c:c.execute('UPDATE kakao_auth SET access_token=?,refresh_token=?,expires_at=? WHERE id=1',(token,updated.get('refresh_token',row['refresh_token']),int(time.time())+int(updated['expires_in'])))
- # 상담 유형, 고객 이름, 연락처 등 민감한 내용은 메시지에 포함하지 않습니다.
- template={'object_type':'text','text':f'[심리상담 쉼표]\n새 예약 신청: {day} {slot}\n승인 대기 중입니다.\n관리자 페이지에서 확인해 주세요.','link':{'web_url':'https://shimpyo-homepage.onrender.com/admin','mobile_web_url':'https://shimpyo-homepage.onrender.com/admin'}}
- kakao_http('https://kapi.kakao.com/v2/api/talk/memo/default/send',{'template_object':json.dumps(template,ensure_ascii=False)},bearer=token)
-
-@app.get('/admin/kakao/connect')
-@admin_required
-def kakao_connect():
- if not KAKAO_REST_KEY:return 'Render 환경변수 SHIMPYO_KAKAO_REST_KEY 설정이 필요합니다.',503
- state=secrets.token_urlsafe(32);session['kakao_oauth_state']=state
- params={'client_id':KAKAO_REST_KEY,'redirect_uri':KAKAO_CALLBACK,'response_type':'code','scope':'talk_message','state':state}
- return redirect('https://kauth.kakao.com/oauth/authorize?'+urlencode(params))
-
-@app.get('/auth/kakao/callback')
-@admin_required
-def kakao_callback():
- state=session.pop('kakao_oauth_state',None)
- if not state or not secrets.compare_digest(state,request.args.get('state','')):abort(403)
- if request.args.get('error'):return '카카오 계정 연결이 취소되었거나 동의가 완료되지 않았습니다.',400
- code=request.args.get('code')
- if not code:abort(400)
- try:
-  result=kakao_http('https://kauth.kakao.com/oauth/token',dict(kakao_token_params(),grant_type='authorization_code',redirect_uri=KAKAO_CALLBACK,code=code))
-  with db() as c:c.execute('INSERT OR REPLACE INTO kakao_auth(id,access_token,refresh_token,expires_at) VALUES(1,?,?,?)',(result['access_token'],result['refresh_token'],int(time.time())+int(result['expires_in'])))
- except (HTTPError,URLError,KeyError,ValueError):
-  app.logger.exception('카카오 계정 연결 실패')
-  return '카카오 연결에 실패했습니다. 설정을 확인해 주세요.',502
- return '카카오톡 알림 계정 연결 완료! 이제 가상 예약으로 알림을 테스트해 주세요.'
 
 def admin_required(fn):
  @wraps(fn)
