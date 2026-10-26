@@ -85,25 +85,31 @@ with db() as c:
 ANALYTICS_COOKIE='shimpyo_visitor'
 BOT_UA=re.compile(r'bot|crawl|spider|preview|headless|lighthouse|uptime|monitor|curl|wget',re.I)
 
-def analytics_source(ref, utm):
- if utm:
+def analytics_source(ref, utm, medium=''):
+  """Classify explicit campaign tags first, then the referring hostname."""
   u=utm.lower().strip()
-  if u in ('naver','google','daum','kakao','instagram','facebook','youtube','blog','newsletter'):return u
-  return '캠페인·기타'
- try:
-  host=(urllib.parse.urlsplit(ref).hostname or '').lower()
- except ValueError:host=''
- if not host:return '직접·미확인'
- if host=='shimpyo-homepage.onrender.com':return '직접·미확인'
- if host=='naver.com' or host.endswith('.naver.com'):
-  return '네이버 블로그' if host.startswith('blog.') or host.startswith('m.blog.') else '네이버'
- if host=='google.com' or host.startswith('google.') or '.google.' in host:return '구글'
- if host=='daum.net' or host.endswith('.daum.net'):return '다음'
- if host=='kakao.com' or host.endswith('.kakao.com'):return '카카오'
- if host=='instagram.com' or host.endswith('.instagram.com'):return '인스타그램'
- if host=='facebook.com' or host.endswith('.facebook.com'):return '페이스북'
- if host=='youtube.com' or host.endswith('.youtube.com'):return '유튜브'
- return '기타 사이트'
+  m=medium.lower().strip()
+  if u:
+   if u in ('naver','naver_blog','naverblog'):
+    return '네이버 블로그' if m in ('blog','naver_blog','post') or u!='naver' else '네이버'
+   if u in ('google','daum','kakao','instagram','facebook','youtube'):
+    return {'google':'구글','daum':'다음','kakao':'카카오','instagram':'인스타그램','facebook':'페이스북','youtube':'유튜브'}[u]
+   if u in ('blog','newsletter'):return '블로그·기타' if u=='blog' else '뉴스레터'
+   return '캠페인·기타'
+  try:
+   host=(urllib.parse.urlsplit(ref).hostname or '').lower().rstrip('.')
+  except ValueError:host=''
+  if not host:return '직접·미확인'
+  if host=='shimpyo-homepage.onrender.com':return '직접·미확인'
+  if host=='naver.com' or host.endswith('.naver.com'):
+   return '네이버 블로그' if host in ('blog.naver.com','m.blog.naver.com') else '네이버'
+  if host=='google.com' or host.startswith('google.') or '.google.' in host:return '구글'
+  if host=='daum.net' or host.endswith('.daum.net'):return '다음'
+  if host=='kakao.com' or host.endswith('.kakao.com'):return '카카오'
+  if host=='instagram.com' or host.endswith('.instagram.com'):return '인스타그램'
+  if host=='facebook.com' or host.endswith('.facebook.com'):return '페이스북'
+  if host=='youtube.com' or host.endswith('.youtube.com'):return '유튜브'
+  return '기타 사이트'
 
 @app.post('/api/analytics/visit')
 def analytics_visit():
@@ -115,13 +121,13 @@ def analytics_visit():
  if not isinstance(data,dict):return ('',400)
  path=data.get('path','')
  if not isinstance(path,str) or len(path)>150 or not re.fullmatch(r'/[a-zA-Z0-9_./-]*',path) or path.startswith(('/admin','/api','/auth','/private')) or not (path=='/' or path.endswith('.html')):return ('',400)
- ref=data.get('referrer','');utm=data.get('utm_source','')
- if not isinstance(ref,str) or not isinstance(utm,str):return ('',400)
+ ref=data.get('referrer','');utm=data.get('utm_source','');medium=data.get('utm_medium','')
+ if not isinstance(ref,str) or not isinstance(utm,str) or not isinstance(medium,str):return ('',400)
  visitor=request.cookies.get(ANALYTICS_COOKIE,'')
  if not re.fullmatch(r'[a-f0-9]{32}',visitor):visitor=secrets.token_hex(16)
  with db() as c:
   c.execute('INSERT INTO analytics_events(visitor_id,day,path,source,created_at) VALUES(?,?,?,?,?)',
-   (visitor,local_today().isoformat(),path,analytics_source(ref[:1000],utm[:80]),local_now()))
+   (visitor,local_today().isoformat(),path,analytics_source(ref[:1000],utm[:80],medium[:80]),local_now()))
  response=app.make_response(('',204))
  response.set_cookie(ANALYTICS_COOKIE,visitor,max_age=60*60*24*30,httponly=True,secure=app.config['SESSION_COOKIE_SECURE'],samesite='Lax',path='/')
  return response
@@ -246,7 +252,7 @@ def kakao_callback():
 def analytics_report():
  today=local_today();start=(today-timedelta(days=29)).isoformat()
  with db() as c:
-  rows=c.execute('SELECT day,visitor_id,path,source FROM analytics_events WHERE day>=?',(start,)).fetchall()
+  rows=c.execute('SELECT day,visitor_id,path,source FROM analytics_events WHERE day>=? ORDER BY created_at ASC,id ASC',(start,)).fetchall()
   totals=c.execute('SELECT COUNT(DISTINCT visitor_id) AS visitors, COUNT(*) AS views FROM analytics_events').fetchone()
   month=c.execute('SELECT COUNT(DISTINCT visitor_id) AS n FROM analytics_events WHERE day>=? AND day<=?',(today.replace(day=1).isoformat(),today.isoformat())).fetchone()['n']
   bookings=c.execute('SELECT COUNT(*) AS n FROM reservations WHERE created_at>=?',(today.replace(day=1).isoformat(),)).fetchone()['n']
