@@ -211,7 +211,7 @@ def rate_ok(key,limit,window):
 def valid_slot(day,slot):
  try:d=date.fromisoformat(day)
  except (ValueError,TypeError):return False
- if d<local_today() or d>local_today()+timedelta(days=180):return False
+ if d<=local_today() or d>local_today()+timedelta(days=180):return False
  if not isinstance(slot,str) or not re.fullmatch(r'\d{2}:00',slot):return False
  hour=int(slot[:2]);return d.weekday()!=6 and ((10<=hour<=21) if d.weekday()<5 else (13<=hour<=21))
 
@@ -226,7 +226,7 @@ def reservation_availability():
   day=request.args.get('date','')
   try:
    d=date.fromisoformat(day)
-   if d.isoformat()!=day or d<local_today() or d>local_today()+timedelta(days=180):raise ValueError()
+   if d.isoformat()!=day or d<=local_today() or d>local_today()+timedelta(days=180):raise ValueError()
   except (ValueError,TypeError):
    return jsonify(error='조회할 날짜를 확인해 주세요.'),400
   with db() as c:
