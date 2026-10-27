@@ -95,3 +95,42 @@
 @media(max-width:900px){.booking-layout-art .booking-info-body{grid-template-columns:repeat(2,minmax(0,1fr))}.booking-layout-art .booking-info-item{border-bottom:1px solid #e5e5db}}
 @media(max-width:720px){.booking-layout-art{grid-template-columns:minmax(0,1fr);gap:16px}.booking-layout-art>.booking-info-panel{grid-column:auto}.booking-layout-art .booking-info-body{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 17px}.booking-layout-art .booking-calendar-panel,.booking-layout-art .booking-times-panel{grid-column:auto}.booking-layout-art>.panel{padding:22px 18px}.online-booking-wide{padding:23px 18px}.online-booking-wide .online-booking-fields{grid-template-columns:1fr;gap:8px}}
 @media(max-width:390px){.booking-layout-art .booking-info-body{grid-template-columns:1fr}.booking-layout-art .time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* 모바일 첫 화면 정렬 보정 v3: PC 화면과 기존 기능에는 영향 없음 */
+@media screen and (max-width:700px) {
+  .hero {
+    display:block !important;
+    position:relative;
+    min-height:0 !important;
+    height:clamp(640px, calc(100svh - 70px), 790px) !important;
+    padding:0 !important;
+    background-image:linear-gradient(180deg,rgba(248,244,237,.97) 0%,rgba(248,244,237,.90) 27%,rgba(248,244,237,.40) 51%,rgba(248,244,237,0) 79%),url('assets/space-5.jpg') !important;
+    background-position:center bottom !important;
+    background-size:cover !important;
+    background-repeat:no-repeat !important;
+  }
+  .hero > .wrap {
+    width:100%;
+    padding:24px 22px 0 !important;
+    margin:0 auto !important;
+  }
+  .hero .eyebrow {font-size:10px !important}
+  .hero h1 {
+    font-size:clamp(35px,9.1vw,48px) !important;
+    line-height:1.2 !important;
+    margin:13px 0 15px !important;
+  }
+  .hero p {
+    margin:0 0 0 5px !important;
+    font-size:clamp(13px,3.4vw,16px) !important;
+    line-height:1.65 !important;
+    max-width:345px !important;
+  }
+  .mobile-hero-benefits {bottom:80px !important}
+  .mobile-hero-contact {bottom:12px !important}
+}
+@media screen and (max-width:390px) {
+  .hero > .wrap {padding:22px 18px 0 !important}
+  .hero h1 {font-size:clamp(34px,9vw,39px) !important}
+}
