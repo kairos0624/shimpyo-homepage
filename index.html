@@ -49,6 +49,52 @@
   .mobile-hero-benefits{left:9px;right:9px}
   .mobile-hero-contact{left:9px;right:9px}
 }
+
+/* 쉼표 모바일 메인 최적화 — PC 화면에는 적용되지 않음 */
+@media (max-width:700px) {
+  .nav-wrap .nav {height:70px}
+  .nav-wrap .nav-links {top:70px;max-height:calc(100dvh - 70px);overflow-y:auto}
+  .nav-wrap .logo {font-size:25px}
+  .nav-wrap .logo img {width:47px;height:47px}
+  .nav-wrap .menu-btn {min-width:44px;min-height:44px}
+  .hero {
+    min-height:0;
+    height:clamp(640px,calc(100svh - 70px),790px);
+    padding-bottom:0;
+    overflow:hidden;
+    background-image:linear-gradient(180deg,rgba(248,244,237,.95) 0%,rgba(248,244,237,.81) 24%,rgba(248,244,237,.13) 55%,rgba(248,244,237,0) 78%),url('assets/space-5.jpg');
+    background-size:cover;
+    background-position:center bottom;
+  }
+  .hero .wrap {padding:27px 22px 0}
+  .hero .eyebrow {font-size:10px;letter-spacing:.23em}
+  .hero h1 {font-size:clamp(35px,9.1vw,53px);line-height:1.19;margin:15px 0 16px}
+  .hero p {margin-left:5px;max-width:340px;font-size:clamp(13px,3.4vw,16px);line-height:1.65}
+  .mobile-hero-benefits {bottom:80px;left:12px;right:12px;padding:12px 4px 11px;border-radius:17px}
+  .mobile-benefit-icon {width:39px;height:39px;margin-bottom:5px}
+  .mobile-benefit-icon svg {width:23px;height:23px}
+  .mobile-hero-benefits strong {font-size:clamp(11px,3.2vw,14px)}
+  .mobile-hero-benefits small {font-size:clamp(9px,2.6vw,11px)}
+  .mobile-hero-contact {bottom:12px;left:12px;right:12px;min-height:57px;font-size:17px}
+  .mobile-hero-contact svg {width:20px;height:20px}
+  .section {padding:49px 0}
+  .head {margin-bottom:27px}
+  .head h2 {font-size:clamp(25px,6.8vw,32px)}
+  .contact-overlay {padding:10px}
+  .contact-dialog {max-height:calc(100dvh - 20px);padding:24px 19px;border-radius:16px}
+  .contact-dialog input:not([type=checkbox]),.contact-dialog textarea {font-size:16px}
+}
+@media (max-width:390px) {
+  .hero {height:clamp(630px,calc(100svh - 70px),750px);min-height:0}
+  .hero .wrap {padding:24px 18px 0}
+  .hero h1 {font-size:clamp(34px,9vw,39px)}
+  .hero p {font-size:13px;line-height:1.6}
+  .mobile-hero-benefits,.mobile-hero-contact {left:9px;right:9px}
+}
+@media (max-width:700px) and (max-height:680px) {
+  .hero {height:640px}
+}
+
 </style>
 </head><body>
 <header class="nav-wrap"><div class="wrap nav"><a class="logo" href="index.html"><img alt="쉼표 간판 로고" src="assets/shimpyo-sign.png"/><span>쉼표<small>심리상담센터</small></span></a><button aria-expanded="false" aria-label="메뉴 열기" class="menu-btn" id="menuBtn">☰</button><nav class="nav-links" id="navLinks"><a href="index.html">홈</a><a href="about.html">센터 소개</a><a href="programs.html">상담 프로그램</a><a href="counselor.html">센터장 소개</a><a href="booking.html">상담 예약</a><a href="location.html">오시는 길</a><a class="btn" href="#contact" id="contactOpen" aria-haspopup="dialog">문의하기</a></nav></div></header>
