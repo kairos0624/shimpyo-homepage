@@ -230,7 +230,31 @@ body{display:flex;min-width:0}
 .ga-link{color:#356b4a;text-decoration:underline;text-underline-offset:3px;font-size:13px}
 @media(max-width:850px){.ga-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ga-secondary{grid-template-columns:1fr}}
 @media(max-width:500px){.ga-cards{gap:9px}.ga-card{padding:13px}.ga-card strong{font-size:23px}.ga-card .ga-label{font-size:12px}.ga-main-panel{padding:13px}.ga-graph svg{min-width:590px}}
-.schedule-today-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e5e9df;flex-wrap:wrap}.schedule-today-row button{font-size:12px;padding:6px 10px}</style><style>
+.schedule-today-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e5e9df;flex-wrap:wrap}.schedule-today-row button{font-size:12px;padding:6px 10px}
+/* Mobile counseling calendar: fit all seven days inside the viewport. */
+@media (max-width:700px){
+  #calendarView,.calendar-scroll{min-width:0;max-width:100%;width:100%;box-sizing:border-box}
+  #calendarView .calendar-scroll{overflow-x:hidden}
+  #calendarView .calendar-grid{min-width:0;width:100%;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;box-sizing:border-box}
+  #calendarView .cal-weekday{min-width:0;padding:5px 0;font-size:11px}
+  #calendarView .cal-empty{min-height:66px}
+  #calendarView .cal-date{min-width:0;min-height:66px;padding:5px 2px;gap:3px;overflow:hidden;border-radius:6px}
+  #calendarView .cal-date.today{padding:4px 1px}
+  #calendarView .cal-date strong{font-size:12px;line-height:1.2}
+  #calendarView .cal-count{font-size:10px;line-height:1.2;white-space:nowrap}
+  #calendarView .cal-status{font-size:9px;padding:1px 2px;max-width:100%;box-sizing:border-box}
+  #calendarView .cal-dots{gap:2px}
+  #calendarView .calendar-controls{gap:5px}
+  #calendarView .calendar-controls button{padding:7px 8px;font-size:12px}
+  #calendarView .calendar-legend{gap:9px;font-size:11px}
+}
+@media(max-width:380px){
+  #calendarView .calendar-grid{gap:2px}
+  #calendarView .cal-date{padding:4px 1px}
+  #calendarView .cal-date strong{font-size:11px}
+  #calendarView .cal-count{font-size:9px}
+}
+</style><style>
 .inquiry-list{display:grid;gap:12px}.inquiry-item{background:white;border:1px solid #dce6dc;border-radius:14px;padding:18px;overflow-wrap:anywhere}.inquiry-item .inquiry-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}.inquiry-item .inquiry-message{white-space:pre-wrap;line-height:1.7;margin:14px 0}.inquiry-item .inquiry-actions{display:flex;gap:8px;flex-wrap:wrap}.inquiry-status{background:#fff0d2;border-radius:14px;padding:4px 10px;font-size:13px}.inquiry-status.done{background:#e4efe4}
 
 /* 문의 내용 미리보기 및 전체보기 팝업 */
