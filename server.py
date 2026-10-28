@@ -1,5 +1,5 @@
 """심리상담 쉼표 예약 관리 서버. 운영 시 HTTPS 역방향 프록시 및 환경변수 필수."""
-import os, re, sqlite3, secrets, time, json, urllib.parse, urllib.request, urllib.error, logging
+import os, re, sqlite3, secrets, time, json, urllib.parse, urllib.request, urllib.error, logging, base64, binascii
 import psycopg
 from psycopg.rows import dict_row
 from datetime import datetime, date, timedelta
@@ -9,7 +9,7 @@ def local_today(): return datetime.now(KST).date()
 def local_now(): return datetime.now(KST).isoformat(timespec="seconds")
 from pathlib import Path
 from functools import wraps
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, abort
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, abort, Response
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE=Path(__file__).resolve().parent
@@ -22,7 +22,7 @@ KAKAO_REDIRECT_URI=os.environ.get('SHIMPYO_KAKAO_REDIRECT_URI','https://shimpyo-
 if not ADMIN_PASSWORD or not SECRET or len(SECRET)<32:
     raise RuntimeError('운영 전 SHIMPYO_ADMIN_PASSWORD 와 32자 이상 SHIMPYO_SECRET_KEY 를 설정하세요.')
 app=Flask(__name__,static_folder=None)
-app.config.update(SECRET_KEY=SECRET,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',SESSION_COOKIE_SECURE=os.environ.get('SHIMPYO_COOKIE_SECURE','1')=='1',PERMANENT_SESSION_LIFETIME=timedelta(hours=8),MAX_CONTENT_LENGTH=8192)
+app.config.update(SECRET_KEY=SECRET,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',SESSION_COOKIE_SECURE=os.environ.get('SHIMPYO_COOKIE_SECURE','1')=='1',PERMANENT_SESSION_LIFETIME=timedelta(hours=8),MAX_CONTENT_LENGTH=1024*1024)
 PASSWORD_HASH=generate_password_hash(ADMIN_PASSWORD)
 PROGRAMS=['성인 심리상담','커플·부부·가족 상담','아동·청소년 상담','심리검사','노인 심리상담','집단상담','진로상담','기타 상담']
 DATABASE_URL=os.environ.get('DATABASE_URL','').strip()
@@ -117,6 +117,14 @@ with db() as c:
  c.execute("""CREATE TABLE IF NOT EXISTS counseling_programs (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
   tag TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
+ # Backwards-compatible columns: retain all existing programs and bookings.
+ if DATABASE_URL:
+  c.execute('ALTER TABLE counseling_programs ADD COLUMN IF NOT EXISTS archived INTEGER NOT NULL DEFAULT 0')
+  c.execute('ALTER TABLE counseling_programs ADD COLUMN IF NOT EXISTS image_data TEXT')
+ else:
+  cols={r['name'] for r in c.execute('PRAGMA table_info(counseling_programs)').fetchall()}
+  if 'archived' not in cols:c.execute('ALTER TABLE counseling_programs ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+  if 'image_data' not in cols:c.execute('ALTER TABLE counseling_programs ADD COLUMN image_data TEXT')
  if not c.execute('SELECT 1 FROM counseling_programs LIMIT 1').fetchone():
   for p in PROGRAM_SEEDS:
    c.execute('INSERT INTO counseling_programs(id,name,description,tag,sort_order,active) VALUES(?,?,?,?,?,1)',
@@ -124,12 +132,21 @@ with db() as c:
 
 def active_program_names():
  with db() as c:
-  return {r['name'] for r in c.execute('SELECT name FROM counseling_programs WHERE active=1').fetchall()}
+  return {r['name'] for r in c.execute('SELECT name FROM counseling_programs WHERE active=1 AND archived=0').fetchall()}
+
+@app.get('/api/programs/<int:pid>/image')
+def program_image(pid):
+ with db() as c:
+  row=c.execute('SELECT image_data FROM counseling_programs WHERE id=? AND active=1 AND archived=0',(pid,)).fetchone()
+ if not row or not row['image_data']:abort(404)
+ try:raw=base64.b64decode(row['image_data'],validate=True)
+ except (ValueError,binascii.Error):abort(404)
+ return Response(raw,mimetype='image/jpeg',headers={'Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'})
 
 @app.get('/api/programs')
 def public_programs():
  with db() as c:
-  rows=c.execute('SELECT id,name,description,tag,sort_order FROM counseling_programs WHERE active=1 ORDER BY sort_order,id').fetchall()
+  rows=c.execute('SELECT id,name,description,tag,sort_order,CASE WHEN image_data IS NULL THEN 0 ELSE 1 END AS has_image FROM counseling_programs WHERE active=1 AND archived=0 ORDER BY sort_order,id').fetchall()
  return jsonify([dict(r) for r in rows])
 
 def audit_event(action, target=''):
@@ -515,7 +532,7 @@ def change_password():
 @admin_required
 def admin_programs():
  with db() as c:
-  rows=c.execute('SELECT id,name,description,tag,sort_order,active FROM counseling_programs ORDER BY sort_order,id').fetchall()
+  rows=c.execute('SELECT id,name,description,tag,sort_order,active,CASE WHEN image_data IS NULL THEN 0 ELSE 1 END AS has_image FROM counseling_programs WHERE archived=0 ORDER BY sort_order,id').fetchall()
  return jsonify([dict(r) for r in rows])
 
 @app.post('/api/admin/programs')
@@ -546,9 +563,50 @@ def admin_program_update(pid):
  with db() as c:
   old=c.execute('SELECT * FROM counseling_programs WHERE id=?',(pid,)).fetchone()
   if not old:return jsonify(error='프로그램이 없습니다.'),404
-  if c.execute('SELECT 1 FROM counseling_programs WHERE name=? AND id!=?',(name,pid)).fetchone():return jsonify(error='동일한 프로그램 이름이 있습니다.'),409
+  if c.execute('SELECT 1 FROM counseling_programs WHERE name=? AND id!=? AND archived=0',(name,pid)).fetchone():return jsonify(error='동일한 프로그램 이름이 있습니다.'),409
   c.execute('UPDATE counseling_programs SET name=?,description=?,tag=?,sort_order=?,active=? WHERE id=?',(name,description,tag,order,active,pid))
  audit_event('상담 프로그램 수정',str(pid))
+ return jsonify(ok=True)
+
+
+@app.post('/api/admin/programs/<int:pid>/delete')
+@admin_required
+def admin_program_delete(pid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ with db() as c:
+  row=c.execute('SELECT name FROM counseling_programs WHERE id=? AND archived=0',(pid,)).fetchone()
+  if not row:return jsonify(error='프로그램이 없습니다.'),404
+  c.execute('UPDATE counseling_programs SET active=0,archived=1 WHERE id=?',(pid,))
+ audit_event('상담 프로그램 삭제(보관)',str(pid))
+ return jsonify(ok=True)
+
+@app.post('/api/admin/programs/<int:pid>/image')
+@admin_required
+def admin_program_image(pid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ data=request.get_json(silent=True) or {}
+ encoded=data.get('image')
+ if not isinstance(encoded,str) or len(encoded)>550000 or len(encoded)<10:
+  return jsonify(error='이미지 크기가 너무 크거나 잘못되었습니다.'),400
+ try:raw=base64.b64decode(encoded,validate=True)
+ except (ValueError,binascii.Error):return jsonify(error='이미지 형식을 확인해 주세요.'),400
+ # JPEG signature, ending, and 400 KB size limit; browser converts input to JPEG.
+ if not (raw.startswith(b'\xff\xd8\xff') and raw.endswith(b'\xff\xd9') and len(raw)<=400000):
+  return jsonify(error='400KB 이하 JPEG 이미지만 저장할 수 있습니다.'),400
+ with db() as c:
+  if not c.execute('SELECT 1 FROM counseling_programs WHERE id=? AND archived=0',(pid,)).fetchone():return jsonify(error='프로그램이 없습니다.'),404
+  c.execute('UPDATE counseling_programs SET image_data=? WHERE id=?',(encoded,pid))
+ audit_event('상담 프로그램 이미지 변경',str(pid))
+ return jsonify(ok=True)
+
+@app.post('/api/admin/programs/<int:pid>/image/remove')
+@admin_required
+def admin_program_image_remove(pid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ with db() as c:
+  if not c.execute('SELECT 1 FROM counseling_programs WHERE id=? AND archived=0',(pid,)).fetchone():return jsonify(error='프로그램이 없습니다.'),404
+  c.execute('UPDATE counseling_programs SET image_data=NULL WHERE id=?',(pid,))
+ audit_event('상담 프로그램 이미지 제거',str(pid))
  return jsonify(ok=True)
 
 @app.get('/api/admin/audit')

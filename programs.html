@@ -8,7 +8,7 @@
   const p=programs[i];let card;
   if(p.id>=1&&p.id<=templates.length){card=templates[p.id-1];}
   else{card=document.createElement('article');card.className='detail-card program-photo-card';const content=document.createElement('div');content.className='program-card-content';content.innerHTML='<span class="program-number"></span><h3></h3><p></p><span class="tag"></span><div style="margin-top:18px"><a class="btn" href="booking.html">예약 안내 보기</a></div>';card.append(content);}
-  card.querySelector('.program-number').textContent=String(i+1).padStart(2,'0');card.querySelector('h3').textContent=p.name;card.querySelector('p').textContent=p.description;card.querySelector('.tag').textContent=p.tag||'';frag.append(card);
+  if(p.has_image){let photo=card.querySelector('.program-side-photo');if(!photo){photo=document.createElement('img');photo.className='program-side-photo';photo.loading='lazy';card.append(photo)}photo.src='/api/programs/'+p.id+'/image';photo.alt=p.name+' 안내 이미지'}card.querySelector('.program-number').textContent=String(i+1).padStart(2,'0');card.querySelector('h3').textContent=p.name;card.querySelector('p').textContent=p.description;card.querySelector('.tag').textContent=p.tag||'';frag.append(card);
  }grid.replaceChildren(frag);
  }catch(e){/* Preserve existing public program cards when the API is unavailable. */}
 })();
