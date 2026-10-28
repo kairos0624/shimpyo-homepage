@@ -111,6 +111,11 @@ with db() as c:
   id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
   target TEXT NOT NULL, created_at TEXT NOT NULL)""")
 
+# Daily 09:00 KST reminder delivery ledger (no recipient PII stored).
+with db() as c:
+ c.execute("""CREATE TABLE IF NOT EXISTS daily_reminder_delivery (
+  day TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+
 PROGRAM_SEEDS=[{'id': 1, 'name': '성인 심리상담', 'description': '일상 속 불안과 우울, 스트레스, 자신감 저하, 대인관계의 어려움 등 혼자 감당하기 버거운 마음을 차분히 살펴봅니다.', 'tag': '우울 · 불안 · 스트레스 · 대인관계'}, {'id': 2, 'name': '커플·부부·가족 상담', 'description': '연인 사이의 오해와 갈등, 부부간의 소통 문제, 가족 구성원 사이에서 반복되는 관계의 어려움을 함께 이해하고 해결의 실마리를 찾아갑니다.', 'tag': '연인 관계 · 부부 갈등 · 가족 소통'}, {'id': 3, 'name': '아동·청소년 상담', 'description': '학교생활과 또래관계, 정서 및 행동 변화, 성장 과정에서 겪는 적응의 어려움을 아이와 청소년의 눈높이에서 살펴봅니다.', 'tag': '학교생활 · 또래관계 · 정서'}, {'id': 4, 'name': '심리검사', 'description': '성격, 정서, 인지적 특성 등을 보다 깊이 이해할 수 있도록 심리검사에 관해 안내합니다. 검사 종류와 진행 방식은 상담 후 결정합니다.', 'tag': '성격 · 정서 · 인지'}, {'id': 5, 'name': '노인 심리상담', 'description': '상실과 외로움, 은퇴와 생활환경의 변화, 가족관계 등 노년기에 마주할 수 있는 마음의 어려움을 편안하게 이야기합니다.', 'tag': '상실 · 외로움 · 삶의 변화'}, {'id': 6, 'name': '집단상담', 'description': '비슷한 고민을 지닌 사람들이 서로의 경험을 나누며 자신을 이해하고 관계 속에서 새로운 관점을 발견하도록 돕는 상담입니다.', 'tag': '경험 나눔 · 자기 이해'}, {'id': 7, 'name': '진로상담', 'description': '적성과 강점, 진학과 취업, 진로 전환 등 중요한 선택 앞에서 느끼는 고민을 정리하고 자신에게 맞는 방향을 탐색합니다.', 'tag': '적성 · 진학 · 진로 전환'}, {'id': 8, 'name': '기타 상담', 'description': '어떤 상담이 필요한지 아직 잘 모르시거나 위 항목에 없는 고민이 있다면 먼저 문의해 주세요. 상담 가능 여부와 절차를 안내해 드립니다.', 'tag': '상담 분야 문의 · 기타 고민'}]
 # Editable counseling program catalog. Existing reservations keep their original program text.
 with db() as c:
@@ -236,6 +241,51 @@ def notify_kakao(day,slot):
   if result.get('result_code')!=0:app.logger.warning('카카오 알림 전송 결과 확인 필요')
  except (urllib.error.URLError,ValueError,KeyError,sqlite3.Error,psycopg.Error,TimeoutError) as exc:
   app.logger.warning('카카오 알림 실패 (%s)',type(exc).__name__)
+
+def daily_reminder_text(day, rows):
+ d=date.fromisoformat(day)
+ weekday='월화수목금토일'[d.weekday()]
+ lines=[f'[심리상담 쉼표] 오늘의 상담 일정',f'{d.year}년 {d.month}월 {d.day}일 ({weekday})','',f'오늘은 총 {len(rows)}건의 상담이 예정되어 있습니다.','']
+ for r in rows:
+  lines.extend([f"{r['slot']} | {r['program']}",f"{r['name']} · {r['phone']}",''])
+ lines.append('자세한 예약 정보는 관리자 페이지에서 확인해 주세요.')
+ return '\n'.join(lines)
+
+@app.post('/api/internal/daily-reminder')
+def daily_reminder():
+ # Must be called by a trusted external scheduler. Never put the secret in the URL.
+ secret=os.environ.get('SHIMPYO_DAILY_REMINDER_SECRET','')
+ provided=request.headers.get('X-Shimpyo-Reminder-Secret','')
+ if len(secret)<32 or not secrets.compare_digest(provided,secret):abort(403)
+ now=datetime.now(KST)
+ # Scheduler retries at 09:05 and 09:10; refuse delivery outside this window.
+ if now.hour!=9 or now.minute>19:return jsonify(error='09:00~09:19 KST에만 실행할 수 있습니다.'),409
+ day=now.date().isoformat()
+ with db() as c:
+  rows=c.execute("SELECT slot,program,name,phone FROM reservations WHERE day=? AND status='approved' ORDER BY slot,id",(day,)).fetchall()
+ if not rows:return jsonify(ok=True,status='no_bookings',count=0)
+ # Claim a day before sending, preventing parallel schedulers from double sending.
+ with db() as c:
+  if not DATABASE_URL:c.execute('BEGIN IMMEDIATE')
+  if DATABASE_URL:
+   claimed=c.execute("INSERT INTO daily_reminder_delivery(day,state,updated_at) VALUES(?,'sending',?) ON CONFLICT(day) DO NOTHING RETURNING day",(day,local_now())).fetchone()
+  else:
+   claimed=c.execute("INSERT OR IGNORE INTO daily_reminder_delivery(day,state,updated_at) VALUES(?,'sending',?)",(day,local_now())).rowcount
+ if not claimed:return jsonify(ok=True,status='already_processed')
+ try:
+  token=kakao_token()
+  if not token:raise RuntimeError('카카오 계정 연결 또는 토큰을 확인하세요')
+  msg={'object_type':'text','text':daily_reminder_text(day,rows),
+       'link':{'web_url':'https://shimpyo-homepage.onrender.com/admin','mobile_web_url':'https://shimpyo-homepage.onrender.com/admin'}}
+  result=kakao_post('https://kapi.kakao.com/v2/api/talk/memo/default/send',{'template_object':json.dumps(msg,ensure_ascii=False)},token)
+  if result.get('result_code')!=0:raise RuntimeError('카카오 API가 성공을 확인하지 않았습니다')
+ except Exception as exc:
+  # Preserve the claim on ambiguous network failures: prevents inadvertent duplicate PII messages.
+  app.logger.error('일일 상담 알림 발송 실패: %s',type(exc).__name__)
+  with db() as c:c.execute("UPDATE daily_reminder_delivery SET state='failed',updated_at=? WHERE day=?",(local_now(),day))
+  return jsonify(error='발송에 실패했습니다. 관리자 확인이 필요합니다.'),502
+ with db() as c:c.execute("UPDATE daily_reminder_delivery SET state='sent',updated_at=? WHERE day=?",(local_now(),day))
+ return jsonify(ok=True,status='sent',count=len(rows))
 
 # In-memory rate limits apply per process; add proxy/WAF limits in production.
 _recent={}
