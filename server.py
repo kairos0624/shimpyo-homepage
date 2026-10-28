@@ -452,6 +452,26 @@ def export_reservations():
  for r in rows:writer.writerow([r[k] for k in ('receipt','created_at','day','slot','program','name','phone','status')])
  return Response('\ufeff'+out.getvalue(),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="shimpyo_reservations.csv"','Cache-Control':'no-store'})
 
+@app.get('/api/admin/inquiries.csv')
+@admin_required
+def export_inquiries():
+ import csv, io
+ from flask import Response
+ with db() as c:
+  rows=c.execute('SELECT id,created_at,name,phone,message,status FROM contact_inquiries ORDER BY id DESC').fetchall()
+ out=io.StringIO(newline='')
+ writer=csv.writer(out)
+ writer.writerow(['문의번호','접수일','이름','연락처','문의내용','상태'])
+ for r in rows:
+  values=[r[k] for k in ('id','created_at','name','phone','message','status')]
+  # Avoid spreadsheet formula execution when a downloaded CSV is opened in Excel.
+  writer.writerow([("'"+v if isinstance(v,str) and v.lstrip().startswith(('=','+','-','@')) else v) for v in values])
+ response=Response('\ufeff'+out.getvalue(),mimetype='text/csv; charset=utf-8')
+ response.headers['Content-Disposition']='attachment; filename="shimpyo_inquiries.csv"'
+ response.headers['Cache-Control']='no-store, private'
+ response.headers['X-Content-Type-Options']='nosniff'
+ return response
+
 @app.post('/api/admin/password')
 @admin_required
 def change_password():
