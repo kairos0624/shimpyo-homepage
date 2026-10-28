@@ -406,7 +406,8 @@ def dashboard():
   month_count=c.execute('SELECT COUNT(*) AS n FROM reservations WHERE day>=? AND day<?',(month+'-01',(date.fromisoformat(month+'-01').replace(day=28)+timedelta(days=4)).replace(day=1).isoformat())).fetchone()['n']
   inquiries=c.execute("SELECT COUNT(*) AS n FROM contact_inquiries WHERE status='new'").fetchone()['n']
   upcoming=c.execute("SELECT day,slot,program,status FROM reservations WHERE day>=? AND status!='rejected' ORDER BY day,slot LIMIT 12",(today,)).fetchall()
- return jsonify(total=total,pending=pending,today=today_count,month=month_count,inquiries=inquiries,upcoming=[dict(x) for x in upcoming])
+  today_schedule=c.execute("SELECT id,day,slot,program,name,status FROM reservations WHERE day=? AND status!='rejected' ORDER BY slot,id",(today,)).fetchall()
+ return jsonify(total=total,pending=pending,today=today_count,month=month_count,inquiries=inquiries,upcoming=[dict(x) for x in upcoming],today_schedule=[dict(x) for x in today_schedule])
 
 @app.get('/api/admin/blocks')
 @admin_required
@@ -478,6 +479,34 @@ def admin():return send_from_directory(str(BASE),'admin.html')
 def list_reservations():
  with db() as c:rows=c.execute('SELECT id,receipt,name,phone,program,day,slot,status,created_at FROM reservations ORDER BY created_at DESC,id DESC LIMIT 500').fetchall()
  return jsonify([dict(r) for r in rows])
+@app.post('/api/admin/reservations/<int:rid>/reschedule')
+@admin_required
+def reschedule_reservation(rid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ data=request.get_json(silent=True) or {}
+ day=data.get('day');slot=data.get('slot')
+ if not isinstance(day,str) or not isinstance(slot,str) or not valid_slot(day,slot):
+  return jsonify(error='변경할 날짜와 시간을 확인해 주세요. 내일부터 180일 이내만 가능합니다.'),400
+ try:
+  with db() as c:
+   c.execute('BEGIN IMMEDIATE')
+   if DATABASE_URL:
+    r=c.execute('SELECT id,day,slot,status FROM reservations WHERE id=? FOR UPDATE',(rid,)).fetchone()
+   else:
+    r=c.execute('SELECT id,day,slot,status FROM reservations WHERE id=?',(rid,)).fetchone()
+   if not r:return jsonify(error='예약을 찾을 수 없습니다.'),404
+   if r['status']=='rejected':return jsonify(error='거절된 예약은 먼저 승인 대기로 변경해 주세요.'),400
+   if r['day']==day and r['slot']==slot:return jsonify(ok=True,unchanged=True)
+   if c.execute("SELECT 1 FROM booking_blocks WHERE day=? AND (slot='' OR slot=?) LIMIT 1",(day,slot)).fetchone():
+    return jsonify(error='센터 휴무 또는 예약 차단 시간입니다.'),409
+   if c.execute("SELECT 1 FROM reservations WHERE day=? AND slot=? AND status='approved' AND id!=? LIMIT 1",(day,slot,rid)).fetchone():
+    return jsonify(error='해당 시간은 다른 승인 예약이 있습니다.'),409
+   c.execute('UPDATE reservations SET day=?,slot=?,updated_at=? WHERE id=?',(day,slot,local_now(),rid))
+ except (sqlite3.IntegrityError,psycopg.errors.UniqueViolation):
+  return jsonify(error='동일 시간에 승인된 예약이 있어 변경할 수 없습니다.'),409
+ audit_event('예약 일정 변경',f'{rid} {r["day"]} {r["slot"]} → {day} {slot}')
+ return jsonify(ok=True,day=day,slot=slot)
+
 @app.post('/api/admin/reservations/<int:rid>/status')
 @admin_required
 def change_status(rid):
