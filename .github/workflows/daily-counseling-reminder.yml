@@ -1,0 +1,18 @@
+name: Shimpyo daily counseling reminder
+on:
+  schedule:
+    # 09:00, 09:05, 09:10 KST (UTC+9); retries are idempotent.
+    - cron: '0,5,10 0 * * *'
+  workflow_dispatch:
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send daily schedule to Kakao
+        env:
+          REMINDER_SECRET: ${{ secrets.SHIMPYO_DAILY_REMINDER_SECRET }}
+        run: |
+          test -n "$REMINDER_SECRET"
+          curl --fail-with-body --silent --show-error --retry 2 --retry-delay 10 --max-time 90 \
+            -X POST 'https://shimpyo-homepage.onrender.com/api/internal/daily-reminder' \
+            -H "X-Shimpyo-Reminder-Secret: $REMINDER_SECRET"
