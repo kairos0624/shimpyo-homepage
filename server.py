@@ -374,15 +374,20 @@ def update_inquiry(rid):
  status=data.get('status')
  if status not in ('new','done'):return jsonify(error='잘못된 상태입니다.'),400
  with db() as c:
+  old=c.execute('SELECT status FROM contact_inquiries WHERE id=?',(rid,)).fetchone()
+  if not old:return jsonify(error='문의를 찾을 수 없습니다.'),404
   result=c.execute('UPDATE contact_inquiries SET status=? WHERE id=?',(status,rid))
-  if result.rowcount==0:return jsonify(error='문의를 찾을 수 없습니다.'),404
+ audit_event('문의 상태 변경',f'{rid} {old["status"]} → {status}')
  return jsonify(ok=True)
 
 @app.post('/api/admin/inquiries/<int:rid>/delete')
 @admin_required
 def delete_inquiry(rid):
  if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
- with db() as c:c.execute('DELETE FROM contact_inquiries WHERE id=?',(rid,))
+ with db() as c:
+  result=c.execute('DELETE FROM contact_inquiries WHERE id=?',(rid,))
+  if result.rowcount==0:return jsonify(error='문의를 찾을 수 없습니다.'),404
+ audit_event('문의 삭제',str(rid))
  return jsonify(ok=True)
 
 @app.get('/api/booking/closures')
@@ -488,7 +493,7 @@ def change_password():
 @app.get('/api/admin/audit')
 @admin_required
 def audit_list():
- with db() as c:rows=c.execute('SELECT action,target,created_at FROM admin_audit ORDER BY id DESC LIMIT 50').fetchall()
+ with db() as c:rows=c.execute('SELECT action,target,created_at FROM admin_audit ORDER BY id DESC LIMIT 200').fetchall()
  return jsonify([dict(r) for r in rows])
 
 @app.get('/admin')
