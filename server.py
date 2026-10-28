@@ -111,6 +111,27 @@ with db() as c:
   id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
   target TEXT NOT NULL, created_at TEXT NOT NULL)""")
 
+PROGRAM_SEEDS=[{'id': 1, 'name': '성인 심리상담', 'description': '일상 속 불안과 우울, 스트레스, 자신감 저하, 대인관계의 어려움 등 혼자 감당하기 버거운 마음을 차분히 살펴봅니다.', 'tag': '우울 · 불안 · 스트레스 · 대인관계'}, {'id': 2, 'name': '커플·부부·가족 상담', 'description': '연인 사이의 오해와 갈등, 부부간의 소통 문제, 가족 구성원 사이에서 반복되는 관계의 어려움을 함께 이해하고 해결의 실마리를 찾아갑니다.', 'tag': '연인 관계 · 부부 갈등 · 가족 소통'}, {'id': 3, 'name': '아동·청소년 상담', 'description': '학교생활과 또래관계, 정서 및 행동 변화, 성장 과정에서 겪는 적응의 어려움을 아이와 청소년의 눈높이에서 살펴봅니다.', 'tag': '학교생활 · 또래관계 · 정서'}, {'id': 4, 'name': '심리검사', 'description': '성격, 정서, 인지적 특성 등을 보다 깊이 이해할 수 있도록 심리검사에 관해 안내합니다. 검사 종류와 진행 방식은 상담 후 결정합니다.', 'tag': '성격 · 정서 · 인지'}, {'id': 5, 'name': '노인 심리상담', 'description': '상실과 외로움, 은퇴와 생활환경의 변화, 가족관계 등 노년기에 마주할 수 있는 마음의 어려움을 편안하게 이야기합니다.', 'tag': '상실 · 외로움 · 삶의 변화'}, {'id': 6, 'name': '집단상담', 'description': '비슷한 고민을 지닌 사람들이 서로의 경험을 나누며 자신을 이해하고 관계 속에서 새로운 관점을 발견하도록 돕는 상담입니다.', 'tag': '경험 나눔 · 자기 이해'}, {'id': 7, 'name': '진로상담', 'description': '적성과 강점, 진학과 취업, 진로 전환 등 중요한 선택 앞에서 느끼는 고민을 정리하고 자신에게 맞는 방향을 탐색합니다.', 'tag': '적성 · 진학 · 진로 전환'}, {'id': 8, 'name': '기타 상담', 'description': '어떤 상담이 필요한지 아직 잘 모르시거나 위 항목에 없는 고민이 있다면 먼저 문의해 주세요. 상담 가능 여부와 절차를 안내해 드립니다.', 'tag': '상담 분야 문의 · 기타 고민'}]
+# Editable counseling program catalog. Existing reservations keep their original program text.
+with db() as c:
+ c.execute("""CREATE TABLE IF NOT EXISTS counseling_programs (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
+  tag TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
+ if not c.execute('SELECT 1 FROM counseling_programs LIMIT 1').fetchone():
+  for p in PROGRAM_SEEDS:
+   c.execute('INSERT INTO counseling_programs(id,name,description,tag,sort_order,active) VALUES(?,?,?,?,?,1)',
+    (p['id'],p['name'],p['description'],p['tag'],p['id']))
+
+def active_program_names():
+ with db() as c:
+  return {r['name'] for r in c.execute('SELECT name FROM counseling_programs WHERE active=1').fetchall()}
+
+@app.get('/api/programs')
+def public_programs():
+ with db() as c:
+  rows=c.execute('SELECT id,name,description,tag,sort_order FROM counseling_programs WHERE active=1 ORDER BY sort_order,id').fetchall()
+ return jsonify([dict(r) for r in rows])
+
 def audit_event(action, target=''):
  with db() as c:
   c.execute('INSERT INTO admin_audit(action,target,created_at) VALUES(?,?,?)',(action,str(target)[:120],local_now()))
@@ -244,7 +265,7 @@ def create():
  data=request.get_json(silent=True)
  if not isinstance(data,dict):return jsonify(error='신청 정보를 확인해 주세요.'),400
  name=str(data.get('name','')).strip();phone=str(data.get('phone','')).strip();program=data.get('program');day=data.get('date');slot=data.get('time')
- if not 1<=len(name)<=50 or not re.fullmatch(r'[0-9+()\- ]{9,20}',phone) or program not in PROGRAMS or not valid_slot(day,slot) or data.get('consent') is not True:return jsonify(error='성함, 연락처, 상담 종류, 희망 일정과 개인정보 동의를 확인해 주세요.'),400
+ if not 1<=len(name)<=50 or not re.fullmatch(r'[0-9+()\- ]{9,20}',phone) or program not in active_program_names() or not valid_slot(day,slot) or data.get('consent') is not True:return jsonify(error='성함, 연락처, 상담 종류, 희망 일정과 개인정보 동의를 확인해 주세요.'),400
  with db() as c:
   if c.execute('SELECT 1 FROM booking_blocks WHERE day=? AND (slot=\'\' OR slot=?)',(day,slot)).fetchone():return jsonify(error='센터 휴무 또는 예약 불가 시간입니다.'),409
   if c.execute('SELECT 1 FROM reservations WHERE day=? AND slot=? AND status=?',(day,slot,'approved')).fetchone():return jsonify(error='이미 확정된 시간입니다. 다른 시간을 선택해 주세요.'),409
@@ -488,6 +509,46 @@ def change_password():
  with db() as c:c.execute("INSERT INTO admin_settings(key,value) VALUES('password_hash',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(generate_password_hash(new),))
  audit_event('관리자 비밀번호 변경')
  session.clear()
+ return jsonify(ok=True)
+
+@app.get('/api/admin/programs')
+@admin_required
+def admin_programs():
+ with db() as c:
+  rows=c.execute('SELECT id,name,description,tag,sort_order,active FROM counseling_programs ORDER BY sort_order,id').fetchall()
+ return jsonify([dict(r) for r in rows])
+
+@app.post('/api/admin/programs')
+@admin_required
+def admin_program_create():
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ data=request.get_json(silent=True) or {}
+ name=str(data.get('name','')).strip();description=str(data.get('description','')).strip();tag=str(data.get('tag','')).strip()
+ if not (1<=len(name)<=60 and 1<=len(description)<=600 and len(tag)<=120):return jsonify(error='이름(1~60자), 설명(1~600자), 키워드(120자 이하)를 확인해 주세요.'),400
+ with db() as c:
+  if c.execute('SELECT 1 FROM counseling_programs WHERE name=?',(name,)).fetchone():return jsonify(error='동일한 프로그램 이름이 있습니다.'),409
+  nextid=c.execute('SELECT COALESCE(MAX(id),0)+1 AS n FROM counseling_programs').fetchone()['n']
+  order=c.execute('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM counseling_programs').fetchone()['n']
+  c.execute('INSERT INTO counseling_programs(id,name,description,tag,sort_order,active) VALUES(?,?,?,?,?,1)',(nextid,name,description,tag,order))
+ audit_event('상담 프로그램 추가',str(nextid))
+ return jsonify(ok=True,id=nextid),201
+
+@app.post('/api/admin/programs/<int:pid>')
+@admin_required
+def admin_program_update(pid):
+ if not csrf_ok():return jsonify(error='보안 확인에 실패했습니다.'),403
+ data=request.get_json(silent=True) or {}
+ name=str(data.get('name','')).strip();description=str(data.get('description','')).strip();tag=str(data.get('tag','')).strip()
+ try:order=int(data.get('sort_order'));active=int(data.get('active'))
+ except (ValueError,TypeError):return jsonify(error='표시 순서와 노출 여부를 확인해 주세요.'),400
+ if not (1<=len(name)<=60 and 1<=len(description)<=600 and len(tag)<=120 and 1<=order<=9999 and active in (0,1)):
+  return jsonify(error='입력값을 확인해 주세요.'),400
+ with db() as c:
+  old=c.execute('SELECT * FROM counseling_programs WHERE id=?',(pid,)).fetchone()
+  if not old:return jsonify(error='프로그램이 없습니다.'),404
+  if c.execute('SELECT 1 FROM counseling_programs WHERE name=? AND id!=?',(name,pid)).fetchone():return jsonify(error='동일한 프로그램 이름이 있습니다.'),409
+  c.execute('UPDATE counseling_programs SET name=?,description=?,tag=?,sort_order=?,active=? WHERE id=?',(name,description,tag,order,active,pid))
+ audit_event('상담 프로그램 수정',str(pid))
  return jsonify(ok=True)
 
 @app.get('/api/admin/audit')
