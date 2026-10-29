@@ -6,10 +6,11 @@
 /* 예약 달력: 종일 휴무는 선택할 수 없으며 사유를 함께 표시합니다. */
 .wizard-calendar .calendar button.booking-closed{background:#f1f1ed!important;border:1px solid #dddcd5!important;color:#777e77!important;cursor:not-allowed!important;opacity:1!important;min-height:57px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1.2}
 .wizard-calendar .calendar button.booking-closed .closed-reason{display:block;font-size:10px;line-height:1.2;max-width:100%;overflow-wrap:anywhere;color:#8b5550;font-weight:600}
-.wizard-calendar .calendar button.booking-partial{position:relative}
-.wizard-calendar .calendar button.booking-partial::after{content:'•';position:absolute;right:3px;top:0;color:#a37b45}
+.wizard-calendar .calendar button.booking-partial{background:#fbf6ea!important;border:1px solid #e7d7b9!important;color:#5f5034!important;min-height:57px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1.2}
+.wizard-calendar .calendar button.booking-partial .partial-reason{display:block;font-size:10px;line-height:1.2;color:#926c30;font-weight:600;white-space:nowrap}
+.wizard-calendar .calendar button.booking-partial.selected{background:#e9f3e9!important;border:2px solid #3e6b4a!important;color:#274c30!important}
 .wizard-calendar .calendar button:disabled.booking-closed{opacity:1!important}
-@media(max-width:650px){.wizard-calendar .calendar button.booking-closed{min-height:53px!important;padding:3px 1px!important;font-size:11px!important}.wizard-calendar .calendar button.booking-closed .closed-reason{font-size:9px!important}}
+@media(max-width:650px){.wizard-calendar .calendar button.booking-closed{min-height:53px!important;padding:3px 1px!important;font-size:11px!important}.wizard-calendar .calendar button.booking-closed .closed-reason{font-size:9px!important}.wizard-calendar .calendar button.booking-partial{min-height:53px!important;padding:3px 1px!important;font-size:11px!important}.wizard-calendar .calendar button.booking-partial .partial-reason{font-size:9px!important}}
 </style><style>
 .wizard-shell{max-width:850px;margin:24px auto 28px;padding:30px;border:1px solid #dce5d9;border-radius:22px;background:#fff;box-shadow:0 12px 30px rgba(41,72,45,.06)}
 .wizard-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:30px}.wizard-step{display:flex;flex-direction:column;align-items:center;gap:7px;color:#8b968a;text-align:center;font-size:12px}.wizard-step b{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#e9eee7;color:#657565}.wizard-step.active{color:#315b3d;font-weight:700}.wizard-step.active b{background:#3e6b4a;color:#fff}.wizard-step.done b{background:#dcebdd;color:#315b3d}
@@ -47,6 +48,12 @@
   .wizard-actions{margin-top:17px!important}
   .wizard-actions .btn,.wizard-prev{min-height:45px!important}
   body:has(#onlineBooking) .sticky-phone{display:none!important}
+}
+
+<style>/* 예약 달력 모바일 상태 표시: 공통 버튼 스타일보다 우선 */
+@media(max-width:650px){
+ .wizard-calendar .calendar button.booking-closed,.wizard-calendar .calendar button.booking-partial{min-height:54px!important;padding:3px 1px!important;gap:2px!important;line-height:1.15!important}
+ .wizard-calendar .calendar button.booking-closed .closed-reason,.wizard-calendar .calendar button.booking-partial .partial-reason{font-size:9px!important;line-height:1.15!important;white-space:nowrap!important;letter-spacing:-.4px}
 }
 </style></head><body><header class="nav-wrap"><div class="wrap nav"><a class="logo" href="index.html"><img alt="쉼표 간판 로고" src="assets/shimpyo-sign.png"/><span>쉼표<small>심리상담센터</small></span></a><button aria-expanded="false" aria-label="메뉴 열기" class="menu-btn" id="menuBtn">☰</button><nav class="nav-links" id="navLinks"><a href="index.html">홈</a><a href="about.html">센터 소개</a><a href="programs.html">상담 프로그램</a><a href="counselor.html">센터장 소개</a><a href="booking.html">상담 예약</a><a href="location.html">오시는 길</a><a class="btn" href="tel:01035682327">전화 문의</a></nav></div></header><main><section class="page-hero booking-hero" style="background-image:linear-gradient(90deg,#f6f3ed 0%,#f6f3ed 38%,#f6f3edbb 68%),url('assets/space-6.jpg')"><div class="wrap"><span class="eyebrow">RESERVATION</span><h1>상담 예약</h1><p>잠시 멈추어, 마음을 돌보는 시간을 함께 만들어갑니다.
 상담 일정은 센터 확인 후 확정됩니다.</p></div></section><section class="section white"><div class="wrap"><div class="head"><span class="eyebrow">EASY RESERVATION</span><h2>온라인 상담 예약</h2><p>상담 종류부터 차례대로 선택해 주세요. 신청 후 센터 확인을 거쳐 예약이 확정됩니다.</p></div>
@@ -124,14 +131,14 @@
      const b=document.createElement('button');b.type='button';
      b.disabled=date<firstBookable||date>limit||date.getDay()===0||!closureReady||closed;
      const num=document.createElement('span');num.textContent=d;b.appendChild(num);
-     if(closed){b.classList.add('booking-closed');const reason=document.createElement('span');reason.className='closed-reason';reason.textContent=info.reason||'센터 휴무';b.appendChild(reason);b.title=`${key} · ${reason.textContent} (예약 불가)`;b.setAttribute('aria-label',b.title);}
-     else if(info?.partial){b.classList.add('booking-partial');b.title='일부 시간 예약 불가';}
+     if(closed){b.classList.add('booking-closed');const reason=document.createElement('span');reason.className='closed-reason';reason.textContent=info.reason||'센터 휴무';b.appendChild(reason);b.setAttribute('aria-label',`${key} · 센터 휴무 · 예약 불가`);}
+     else if(info?.partial){b.classList.add('booking-partial');const label=document.createElement('span');label.className='partial-reason';label.textContent='일부 마감';b.appendChild(label);b.setAttribute('aria-label',`${key} · 일부 마감 · 예약 가능 시간 확인`);}
      if(picked&&key===formatDate(picked)&&!closed)b.classList.add('selected');
      b.addEventListener('click',()=>{if(b.disabled)return;picked=date;pickedTime='';renderCalendar();refresh()});cal.appendChild(b);
    }
    $('prevMonth').disabled=shown.getFullYear()===today.getFullYear()&&shown.getMonth()===today.getMonth();
    $('nextMonth').disabled=new Date(shown.getFullYear(),shown.getMonth()+1,1)>limit;
-   const message=$('closureStatus');if(message)message.textContent=closureReady?'휴무일은 선택할 수 없습니다. 점 표시 날짜는 일부 시간이 예약 불가입니다.':'휴무일 정보를 불러오는 중이거나 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+   const message=$('closureStatus');if(message)message.textContent=closureReady?'센터 휴무: 날짜 선택 불가 · 일부 마감: 날짜 선택 후 가능한 시간 확인':'휴무일 정보를 불러오는 중이거나 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.';
  }
 
  let timeRequest=0;async function renderTimes(){const grid=$('timeGrid');grid.innerHTML='';const dateValue=formatDate(picked),seq=++timeRequest;$('dateLabel').textContent='예약 가능 시간을 확인하고 있습니다.';let blocked=[];try{const r=await fetch('/api/reservations/availability?date='+encodeURIComponent(dateValue),{cache:'no-store'});if(!r.ok)throw Error();blocked=(await r.json()).blocked||[]}catch(e){if(seq===timeRequest)$('dateLabel').textContent='예약 가능 시간을 불러오지 못했습니다. 다시 시도해 주세요.';return}if(seq!==timeRequest||!picked||formatDate(picked)!==dateValue)return;$('dateLabel').textContent=readable(picked)+' · 원하시는 시작 시간을 선택해 주세요.';if(blocked.includes(pickedTime)){pickedTime='';$('wizardNext').disabled=true}for(let h=picked.getDay()===6?13:10;h<=21;h++){const t=`${String(h).padStart(2,'0')}:00`,button=document.createElement('button');button.type='button';button.textContent=t;button.disabled=blocked.includes(t);if(button.disabled)button.title='예약 불가';button.classList.toggle('selected',t===pickedTime);button.addEventListener('click',()=>{pickedTime=t;grid.querySelectorAll('button').forEach(x=>x.classList.toggle('selected',x===button));$('wizardNext').disabled=false});grid.appendChild(button)}}
