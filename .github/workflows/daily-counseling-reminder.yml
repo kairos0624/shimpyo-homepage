@@ -1,7 +1,8 @@
 name: Shimpyo daily counseling reminder
 on:
   schedule:
-    # 09:00, 09:05, 09:10 KST (UTC+9); retries are idempotent.
+    # 09:00, 09:05, 09:10 KST (UTC+9). GitHub may delay starts; server accepts 09:00-09:59 KST.
+    # Daily delivery claim makes delayed/repeated runs idempotent.
     - cron: '0,5,10 0 * * *'
   workflow_dispatch:
 jobs:
