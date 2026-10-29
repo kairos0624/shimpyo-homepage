@@ -258,8 +258,8 @@ def daily_reminder():
  provided=request.headers.get('X-Shimpyo-Reminder-Secret','')
  if len(secret)<32 or not secrets.compare_digest(provided,secret):abort(403)
  now=datetime.now(KST)
- # GitHub scheduled jobs can start late; accept authenticated requests from 09:00 to 09:59 KST.
- if now.hour!=9:return jsonify(error='09:00~09:59 KST에만 실행할 수 있습니다.'),409
+ # Scheduler retries at 09:05 and 09:10; refuse delivery outside this window.
+ if now.hour!=9 or now.minute>19:return jsonify(error='09:00~09:19 KST에만 실행할 수 있습니다.'),409
  day=now.date().isoformat()
  with db() as c:
   rows=c.execute("SELECT slot,program,name,phone FROM reservations WHERE day=? AND status='approved' ORDER BY slot,id",(day,)).fetchall()
@@ -307,6 +307,27 @@ def valid_slot(day,slot):
 def secure(resp):
  resp.headers['X-Content-Type-Options']='nosniff';resp.headers['Content-Security-Policy']="frame-ancestors 'none'; base-uri 'self'; object-src 'none'";resp.headers['X-Frame-Options']='DENY';resp.headers['Referrer-Policy']='strict-origin-when-cross-origin';resp.headers['Cache-Control']='no-store' if request.path.startswith('/admin') or request.path.startswith('/api') else 'no-cache'
  return resp
+
+@app.get('/api/reservations/closures')
+def public_reservation_closures():
+  """Public month-level calendar markers. Never expose internal notes to customers."""
+  month=request.args.get('month','')
+  try:
+   first=date.fromisoformat(month+'-01')
+   if first.strftime('%Y-%m')!=month or first<local_today().replace(day=1) or first>local_today()+timedelta(days=210):raise ValueError()
+  except (ValueError,TypeError):return jsonify(error='조회할 월을 확인해 주세요.'),400
+  next_month=(first.replace(day=28)+timedelta(days=4)).replace(day=1)
+  with db() as c:
+   rows=c.execute('SELECT day,slot FROM booking_blocks WHERE day>=? AND day<? ORDER BY day,slot',(first.isoformat(),next_month.isoformat())).fetchall()
+  days={}
+  for r in rows:
+   d=r['day']
+   if d not in days:days[d]={'closed':False,'partial':False}
+   if r['slot']=='':
+    days[d]['closed']=True
+    days[d]['reason']='센터 휴무'
+   else:days[d]['partial']=True
+  return jsonify(month=month,days=days)
 
 @app.get('/api/reservations/availability')
 def reservation_availability():
