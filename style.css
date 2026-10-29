@@ -134,3 +134,7 @@
   .hero > .wrap {padding:22px 18px 0 !important}
   .hero h1 {font-size:clamp(34px,9vw,39px) !important}
 }
+
+/* Homepage hero: calm sofa image; preserve editable headline and navigation. */
+.hero{background-image:linear-gradient(90deg,#f7f4ee 0%,#f7f4eef7 25%,#f7f4eecb 43%,#f7f4ee00 72%),url('assets/shimpyo-hero-sofa.jpg');background-position:center,right center;background-size:cover,cover;background-repeat:no-repeat}
+@media(max-width:700px){.hero{background-image:linear-gradient(180deg,#f7f4ee 0%,#f7f4eef9 29%,#f7f4eebc 51%,#f7f4ee00 88%),url('assets/shimpyo-hero-sofa.jpg');background-position:center,center bottom;background-size:cover,auto 63%;background-repeat:no-repeat;background-color:#f7f4ee}}
