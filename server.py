@@ -258,8 +258,8 @@ def daily_reminder():
  provided=request.headers.get('X-Shimpyo-Reminder-Secret','')
  if len(secret)<32 or not secrets.compare_digest(provided,secret):abort(403)
  now=datetime.now(KST)
- # Scheduler retries at 09:05 and 09:10; refuse delivery outside this window.
- if now.hour!=9 or now.minute>19:return jsonify(error='09:00~09:19 KST에만 실행할 수 있습니다.'),409
+ # GitHub scheduled jobs can start late; accept authenticated requests from 09:00 to 09:59 KST.
+ if now.hour!=9:return jsonify(error='09:00~09:59 KST에만 실행할 수 있습니다.'),409
  day=now.date().isoformat()
  with db() as c:
   rows=c.execute("SELECT slot,program,name,phone FROM reservations WHERE day=? AND status='approved' ORDER BY slot,id",(day,)).fetchall()
