@@ -154,6 +154,23 @@
   .hero { background-position: center, 57% bottom !important; background-size: cover, auto 72% !important; }
 }
 
+/* Mobile program cards: extend the existing booking link over the whole card. */
+@media screen and (max-width:700px) {
+  .program-photo-card {position:relative;}
+  .program-photo-card .btn::after {
+    content:"";
+    position:absolute;
+    inset:0;
+    z-index:1;
+    border-radius:inherit;
+    cursor:pointer;
+  }
+  .program-photo-card .btn:focus-visible::after {
+    outline:2px solid var(--green);
+    outline-offset:3px;
+  }
+}
+
 /* Mobile hero refinement: continuous image coverage, soft fade and calmer composition.
    Desktop and existing interactive elements are untouched. */
 @media screen and (max-width:700px) {
