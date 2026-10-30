@@ -89,7 +89,32 @@
  async function loadPrograms(){try{const r=await fetch('/api/programs',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();programs=data.map(x=>x.name);const requested=new URLSearchParams(location.search).get('program');if(requested&&programs.includes(requested)){program=requested;step=2;}drawPrograms();refresh();if(step===2)requestAnimationFrame(()=>{$('onlineBooking').style.scrollMarginTop='90px';$('onlineBooking').scrollIntoView({block:'start',behavior:'instant'});});if(!programs.length)choices.textContent='현재 예약 가능한 상담 프로그램이 없습니다. 전화로 문의해 주세요.';}catch(e){choices.textContent='상담 프로그램을 불러오지 못했습니다. 새로고침하거나 전화로 문의해 주세요.';}}
  loadPrograms();
  function refresh(){document.querySelectorAll('.wizard-pane').forEach(x=>x.hidden=Number(x.dataset.pane)!==step);document.querySelectorAll('.wizard-step').forEach(x=>{const n=Number(x.dataset.step);x.classList.toggle('active',n===step);x.classList.toggle('done',n<step)});$('wizardPrev').hidden=step===1;$('wizardNext').hidden=step===4;$('reservationSubmit').hidden=step!==4;$('wizardNext').disabled=step===1?!program:step===2?!picked:step===3?!pickedTime:false;alert.textContent='';if(step===2)renderCalendar();if(step===3)renderTimes();if(step===4)$('reservationSummary').textContent=`${program} · ${readable(picked)} · ${pickedTime} (예약 신청 단계)`;}
- function renderCalendar(){const cal=$('calendar');cal.innerHTML='';$('monthTitle').textContent=`${shown.getFullYear()}년 ${shown.getMonth()+1}월`;['일','월','화','수','목','금','토'].forEach(w=>{const s=document.createElement('span');s.className='weekday';s.textContent=w;cal.appendChild(s)});const first=new Date(shown.getFullYear(),shown.getMonth(),1).getDay(),count=new Date(shown.getFullYear(),shown.getMonth()+1,0).getDate();for(let i=0;i<first;i++)cal.appendChild(document.createElement('span'));for(let d=1;d<=count;d++){const date=new Date(shown.getFullYear(),shown.getMonth(),d),b=document.createElement('button');b.type='button';b.textContent=d;b.disabled=date<firstBookable||date>limit||date.getDay()===0;if(picked&&formatDate(date)===formatDate(picked))b.classList.add('selected');b.addEventListener('click',()=>{picked=date;pickedTime='';renderCalendar();refresh()});cal.appendChild(b)}$('prevMonth').disabled=shown.getFullYear()===firstBookable.getFullYear()&&shown.getMonth()===firstBookable.getMonth();$('nextMonth').disabled=new Date(shown.getFullYear(),shown.getMonth()+1,1)>limit;}
+ let calendarRequest=0;
+ async function renderCalendar(){
+  const seq=++calendarRequest,month=formatDate(shown).slice(0,7),cal=$('calendar');
+  cal.replaceChildren();cal.textContent='휴무일을 확인하고 있습니다.';$('wizardNext').disabled=true;
+  $('monthTitle').textContent=shown.getFullYear()+'년 '+(shown.getMonth()+1)+'월';
+  $('prevMonth').disabled=shown.getFullYear()===firstBookable.getFullYear()&&shown.getMonth()===firstBookable.getMonth();
+  $('nextMonth').disabled=new Date(shown.getFullYear(),shown.getMonth()+1,1)>limit;
+  let days;
+  try{const r=await fetch('/api/reservations/closures?month='+month,{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(!data.days||typeof data.days!=='object')throw Error();days=data.days;}
+  catch(e){if(seq!==calendarRequest||step!==2)return;cal.replaceChildren();alert.textContent='휴무일을 불러오지 못했습니다. 다시 시도해 주세요.';const retry=document.createElement('button');retry.type='button';retry.textContent='다시 시도';retry.addEventListener('click',()=>{alert.textContent='';renderCalendar()});cal.append(retry);return;}
+  if(seq!==calendarRequest||step!==2)return;
+  if(picked&&days[formatDate(picked)]?.closed){picked=null;pickedTime='';}
+  cal.replaceChildren();
+  ['일','월','화','수','목','금','토'].forEach(w=>{const el=document.createElement('span');el.className='weekday';el.textContent=w;cal.append(el)});
+  const first=new Date(shown.getFullYear(),shown.getMonth(),1).getDay(),count=new Date(shown.getFullYear(),shown.getMonth()+1,0).getDate();
+  for(let i=0;i<first;i++)cal.append(document.createElement('span'));
+  for(let d=1;d<=count;d++){
+   const date=new Date(shown.getFullYear(),shown.getMonth(),d),b=document.createElement('button'),closed=days[formatDate(date)]?.closed;
+   b.type='button';b.textContent=closed?d+' 휴무':d;b.disabled=date<firstBookable||date>limit||date.getDay()===0||!!closed;
+   if(closed){b.title='센터 휴무';b.setAttribute('aria-label',readable(date)+' 센터 휴무');}
+   if(picked&&formatDate(date)===formatDate(picked))b.classList.add('selected');
+   b.addEventListener('click',()=>{picked=date;pickedTime='';refresh()});cal.append(b);
+  }
+  $('wizardNext').disabled=!picked;
+ }
+
  let timeRequest=0;async function renderTimes(){const grid=$('timeGrid');grid.innerHTML='';const dateValue=formatDate(picked),seq=++timeRequest;$('dateLabel').textContent='예약 가능 시간을 확인하고 있습니다.';let blocked=[];try{const r=await fetch('/api/reservations/availability?date='+encodeURIComponent(dateValue),{cache:'no-store'});if(!r.ok)throw Error();blocked=(await r.json()).blocked||[]}catch(e){if(seq===timeRequest)$('dateLabel').textContent='예약 가능 시간을 불러오지 못했습니다. 다시 시도해 주세요.';return}if(seq!==timeRequest||!picked||formatDate(picked)!==dateValue)return;$('dateLabel').textContent=readable(picked)+' · 원하시는 시작 시간을 선택해 주세요.';if(blocked.includes(pickedTime)){pickedTime='';$('wizardNext').disabled=true}for(let h=picked.getDay()===6?13:10;h<=21;h++){const t=`${String(h).padStart(2,'0')}:00`,button=document.createElement('button');button.type='button';button.textContent=t;button.disabled=blocked.includes(t);if(button.disabled)button.title='예약 불가';button.classList.toggle('selected',t===pickedTime);button.addEventListener('click',()=>{pickedTime=t;grid.querySelectorAll('button').forEach(x=>x.classList.toggle('selected',x===button));$('wizardNext').disabled=false});grid.appendChild(button)}}
  $('prevMonth').addEventListener('click',()=>{shown=new Date(shown.getFullYear(),shown.getMonth()-1,1);renderCalendar()});$('nextMonth').addEventListener('click',()=>{shown=new Date(shown.getFullYear(),shown.getMonth()+1,1);renderCalendar()});
  $('wizardPrev').addEventListener('click',()=>{if(step>1){step--;refresh()}});$('wizardNext').addEventListener('click',()=>{if(step<4&&!$('wizardNext').disabled){step++;refresh()}});
