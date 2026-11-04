@@ -193,3 +193,11 @@
 @media screen and (max-width:390px) {
   .hero {background-size:100% 100%,cover !important;background-position:center center, 64% center !important;}
 }
+
+/* 문의 및 예약 접수 완료 안내 */
+.submission-complete{box-sizing:border-box;width:min(440px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #dce5d9;border-radius:20px;padding:30px;text-align:center;background:#fffdf8;color:#344c39;box-shadow:0 20px 60px #0003}
+.submission-complete::backdrop{background:rgba(20,35,24,.55)}
+.submission-complete h2{font-size:22px;line-height:1.5;margin:0 0 16px}
+.submission-complete p{line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;margin:0 0 24px}
+.submission-complete .btn{min-width:120px;min-height:44px;cursor:pointer}
+.submission-complete .btn:focus-visible{outline:3px solid #315b3d;outline-offset:4px}
