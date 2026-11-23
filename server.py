@@ -831,16 +831,30 @@ def public_html(filename):
  html=resp.get_data(as_text=True)
  if dynamic_home:
   resp.headers.pop('Last-Modified',None)
-  cards=[
-   '<li><details class="blog-review">'
-   f'<summary><span>{escape(row["title"])}</span></summary>'
-   f'<p>{escape(row["title"])}<br>'
+  reviews=blog_reviews()
+  page_size=5
+  page_count=max(1,(len(reviews)+page_size-1)//page_size)
+  page=min(max(1,request.args.get('reviews_page',1,type=int)),page_count)
+  start=(page-1)*page_size
+  rows=[
+   '<li class="blog-review">'
+   f'<span class="blog-review-title" title="{escape(row["title"])}">{escape(row["title"])}</span>'
    f'<a class="blog-review-action" href="{escape(row["url"])}">'
-   '네이버 블로그 원문 보기 <span aria-hidden="true">↗</span></a></p>'
-   '</details></li>'
-   for row in blog_reviews()
+   '네이버 블로그 원문 보기</a></li>'
+   for row in reviews[start:start+page_size]
   ]
-  html=html.replace('<!-- blog-review-items -->','\n'.join(cards),1)
+  pagination=''
+  if page_count>1:
+   links=['<nav class="blog-review-pagination" aria-label="상담 후기 페이지">']
+   if page>1:
+    links.append(f'<a href="/?reviews_page={page-1}#blog-reviews">이전</a>')
+   links.append(f'<span>{page} / {page_count}</span>')
+   if page<page_count:
+    links.append(f'<a href="/?reviews_page={page+1}#blog-reviews">다음</a>')
+   links.append('</nav>')
+   pagination=''.join(links)
+  html=html.replace('<!-- blog-review-items -->','\n'.join(rows),1)
+  html=html.replace('<!-- blog-review-pagination -->',pagination,1)
  canonical_path = '/' if filename == 'index.html' else '/' + urllib.parse.quote(filename)
  canonical = f'<link rel="canonical" href="{CANONICAL_ORIGIN}{canonical_path}">'
  html = re.sub(r'</head>', canonical + '</head>', html, count=1, flags=re.I)

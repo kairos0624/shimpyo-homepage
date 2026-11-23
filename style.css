@@ -209,35 +209,23 @@
 }
 #blog-reviews { padding-block: clamp(32px, 6vw, 56px); }
 #blog-reviews .head { margin-bottom: 16px; }
-.blog-review { border-bottom: 1px solid #d8d5cd; }
-.blog-review summary {
+.blog-review {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 11px 3px;
+  border-bottom: 1px solid #d8d5cd;
   color: var(--deep);
-  cursor: pointer;
   font-size: 15px;
   font-weight: 700;
 }
-.blog-review summary::-webkit-details-marker { display: none; }
-.blog-review summary::after {
-  content: '';
-  flex: 0 0 7px;
-  height: 7px;
-  margin-right: 4px;
-  border: solid currentColor;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-.blog-review[open] summary::after { transform: rotate(225deg); }
-.blog-review summary span {
+.blog-review-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.blog-review summary:focus-visible { outline: 3px solid #c3a86f; outline-offset: 2px; }
-.blog-review p { margin: 0 3px 12px; font-size: 14px; overflow-wrap: anywhere; }
-.blog-review-action { font-size: 13px; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
+.blog-review-action { flex: 0 0 auto; white-space: nowrap; font-size: 13px; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
+.blog-review-pagination { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 16px; font-size: 13px; }
+.blog-review-pagination a { color: var(--green); text-decoration: underline; text-underline-offset: 3px; padding: 4px 8px; }
