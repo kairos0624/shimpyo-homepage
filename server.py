@@ -832,11 +832,12 @@ def public_html(filename):
  if dynamic_home:
   resp.headers.pop('Last-Modified',None)
   cards=[
-   f'<li><a class="blog-review-link" href="{escape(row["url"])}">'
-   '<span class="blog-review-source">네이버 블로그</span>'
-   f'<strong>{escape(row["title"])}</strong>'
-   '<span class="blog-review-action">원문 보기 <span aria-hidden="true">↗</span></span>'
-   '</a></li>'
+   '<li><details class="blog-review">'
+   f'<summary><span>{escape(row["title"])}</span></summary>'
+   f'<p>{escape(row["title"])}<br>'
+   f'<a class="blog-review-action" href="{escape(row["url"])}">'
+   '네이버 블로그 원문 보기 <span aria-hidden="true">↗</span></a></p>'
+   '</details></li>'
    for row in blog_reviews()
   ]
   html=html.replace('<!-- blog-review-items -->','\n'.join(cards),1)
