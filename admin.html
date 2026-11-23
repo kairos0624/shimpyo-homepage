@@ -401,7 +401,7 @@ function drawVisitorLine(days){
 }
 function friendlyPage(path){
  const clean=String(path||'/').split(/[?#]/)[0].replace(/\/+$/,'')||'/';
- const names={'/':'메인페이지','/index.html':'메인페이지','/booking.html':'상담 예약','/about.html':'센터 소개','/counselor.html':'상담자 소개','/location.html':'오시는 길'};
+ const names={'/':'메인페이지','/index.html':'메인페이지','/booking.html':'상담 예약','/about.html':'센터 소개','/counselor.html':'상담자 소개','/location.html':'오시는 길','/programs.html':'상담 프로그램','/privacy.html':'개인정보 처리방침'};
  return names[clean]||clean;
 }
 function aggregatePages(items){
