@@ -117,6 +117,7 @@ with db() as c:
   ('심리상담 쉼표', 'https://blog.naver.com/ksbuinhs/224466780520'),
   ('군포 심리상담 쉼표에서 10회 상담을 받은 이야기｜50보라도 괜찮다, 다시 걸으면 되니까', 'https://blog.naver.com/hour20/224432217143'),
   ('군포시 산본 심리검사, 산본 TCI검사, 산본 기질검사, 군포 부부상담 추천 " 심리상담 쉼표"', 'https://blog.naver.com/bong4246/224409866324'),
+  ('산본심리검사 TCI [심리상담 쉼표] 커플상담 후', 'https://blog.naver.com/haen_e/224417375229'),
  ):
   c.execute('INSERT INTO blog_reviews(title,url) VALUES(?,?) ON CONFLICT(url) DO NOTHING', (title,url))
  c.execute("""CREATE TABLE IF NOT EXISTS admin_audit (
