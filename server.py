@@ -438,7 +438,7 @@ def csrf_ok():return secrets.compare_digest(str(session.get('csrf','')),str(requ
 
 def blog_reviews():
  with db() as c:
-  return [dict(row) for row in c.execute('SELECT title,url FROM blog_reviews ORDER BY id').fetchall()]
+  return [dict(row) for row in c.execute('SELECT title,url FROM blog_reviews ORDER BY id DESC').fetchall()]
 
 @app.route('/api/admin/blog-reviews', methods=['GET','POST'])
 @admin_required
