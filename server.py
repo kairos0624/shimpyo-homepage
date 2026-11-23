@@ -13,6 +13,8 @@ from flask import Flask, request, jsonify, send_from_directory, session, redirec
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE=Path(__file__).resolve().parent
+CANONICAL_ORIGIN = 'https://xn--4s4by04a.site'
+ALIAS_HOSTS = {'xn--4s4by04a.shop', 'www.xn--4s4by04a.shop', 'www.xn--4s4by04a.site'}
 DB=Path(os.environ.get('SHIMPYO_DB_PATH', str(BASE/'private'/'reservations.sqlite3'))).resolve()
 ADMIN_PASSWORD=os.environ.get('SHIMPYO_ADMIN_PASSWORD','')
 SECRET=os.environ.get('SHIMPYO_SECRET_KEY','')
@@ -302,6 +304,24 @@ def valid_slot(day,slot):
  if d<=local_today() or d>local_today()+timedelta(days=180):return False
  if not isinstance(slot,str) or not re.fullmatch(r'\d{2}:00',slot):return False
  hour=int(slot[:2]);return d.weekday()!=6 and ((10<=hour<=21) if d.weekday()<5 else (13<=hour<=21))
+
+@app.before_request
+def redirect_public_domain():
+    if request.method not in ('GET', 'HEAD'):
+        return
+    if request.host.partition(':')[0].rstrip('.').lower() not in ALIAS_HOSTS:
+        return
+    # Keep host-bound sessions, callbacks, APIs and health checks on their original host.
+    if request.path.split('/', 2)[1] in {'admin', 'api', 'auth', 'healthz'}:
+        return
+    # Gunicorn retains the original encoding in RAW_URI, including encoded slashes.
+    raw_target = request.environ.get('RAW_URI', '')
+    if not raw_target.startswith('/'):
+        raw_target = urllib.parse.quote(request.path, safe='/')
+        if request.query_string:
+            raw_target += '?' + request.query_string.decode('latin-1')
+    return redirect(CANONICAL_ORIGIN + raw_target, code=301)
+
 
 @app.after_request
 def secure(resp):
@@ -765,6 +785,9 @@ def public_html(filename):
  resp.direct_passthrough=False
  # Inject tracking on public HTML without editing every existing page.
  html=resp.get_data(as_text=True)
+ canonical_path = '/' if filename == 'index.html' else '/' + urllib.parse.quote(filename)
+ canonical = f'<link rel="canonical" href="{CANONICAL_ORIGIN}{canonical_path}">'
+ html = re.sub(r'</head>', canonical + '</head>', html, count=1, flags=re.I)
  script='<script defer src="/analytics.js"></script>'
  if '</body>' in html.lower():
   html=re.sub(r'</body>',script+'</body>',html,count=1,flags=re.I)
