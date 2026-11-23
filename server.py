@@ -247,11 +247,10 @@ def notify_kakao(day,slot):
 def daily_reminder_text(day, rows):
  d=date.fromisoformat(day)
  weekday='월화수목금토일'[d.weekday()]
- lines=[f'[심리상담 쉼표] 오늘의 상담 일정',f'{d.year}년 {d.month}월 {d.day}일 ({weekday})','',f'오늘은 총 {len(rows)}건의 상담이 예정되어 있습니다.','']
- for r in rows:
-  lines.extend([f"{r['slot']} | {r['program']}",f"{r['name']} · {r['phone']}",''])
- lines.append('자세한 예약 정보는 관리자 페이지에서 확인해 주세요.')
- return '\n'.join(lines)
+ times=', '.join(row['slot'] for row in rows)
+ return (f'[심리상담 쉼표] 오늘의 상담 일정\n'
+         f'{d.year}년 {d.month}월 {d.day}일 ({weekday}) · 확정 {len(rows)}건\n'
+         f'{times}\n상세 일정은 관리자 페이지에서 확인해 주세요.')
 
 @app.post('/api/internal/daily-reminder')
 def daily_reminder():
@@ -260,11 +259,11 @@ def daily_reminder():
  provided=request.headers.get('X-Shimpyo-Reminder-Secret','')
  if len(secret)<32 or not secrets.compare_digest(provided,secret):abort(403)
  now=datetime.now(KST)
- # Scheduler retries at 09:05 and 09:10; refuse delivery outside this window.
- if now.hour!=9 or now.minute>19:return jsonify(error='09:00~09:19 KST에만 실행할 수 있습니다.'),409
+ # GitHub Actions can start late. Match the workflow's full morning window.
+ if now.hour!=9:return jsonify(error='09:00~09:59 KST에만 실행할 수 있습니다.'),409
  day=now.date().isoformat()
  with db() as c:
-  rows=c.execute("SELECT slot,program,name,phone FROM reservations WHERE day=? AND status='approved' ORDER BY slot,id",(day,)).fetchall()
+  rows=c.execute("SELECT DISTINCT slot FROM reservations WHERE day=? AND status='approved' ORDER BY slot",(day,)).fetchall()
  if not rows:return jsonify(ok=True,status='no_bookings',count=0)
  # Claim a day before sending, preventing parallel schedulers from double sending.
  with db() as c:
@@ -273,7 +272,12 @@ def daily_reminder():
    claimed=c.execute("INSERT INTO daily_reminder_delivery(day,state,updated_at) VALUES(?,'sending',?) ON CONFLICT(day) DO NOTHING RETURNING day",(day,local_now())).fetchone()
   else:
    claimed=c.execute("INSERT OR IGNORE INTO daily_reminder_delivery(day,state,updated_at) VALUES(?,'sending',?)",(day,local_now())).rowcount
- if not claimed:return jsonify(ok=True,status='already_processed')
+ if not claimed:
+  with db() as c:
+   delivery=c.execute("SELECT state FROM daily_reminder_delivery WHERE day=?",(day,)).fetchone()
+  if not delivery or delivery['state']!='sent':
+   return jsonify(error='이전 발송 결과를 확인해야 합니다.'),409
+  return jsonify(ok=True,status='already_processed')
  try:
   token=kakao_token()
   if not token:raise RuntimeError('카카오 계정 연결 또는 토큰을 확인하세요')
