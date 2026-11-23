@@ -115,6 +115,7 @@ with db() as c:
  for title, url in (
   ('군포 부부상담 추천｜심리상담 쉼표에서 받아본 부부 심리상담 후기', 'https://blog.naver.com/parkh9053/224468133727'),
   ('심리상담 쉼표', 'https://blog.naver.com/ksbuinhs/224466780520'),
+  ('군포 심리상담 쉼표에서 10회 상담을 받은 이야기｜50보라도 괜찮다, 다시 걸으면 되니까', 'https://blog.naver.com/hour20/224432217143'),
  ):
   c.execute('INSERT INTO blog_reviews(title,url) VALUES(?,?) ON CONFLICT(url) DO NOTHING', (title,url))
  c.execute("""CREATE TABLE IF NOT EXISTS admin_audit (
