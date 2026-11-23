@@ -201,3 +201,24 @@
 .submission-complete p{line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;margin:0 0 24px}
 .submission-complete .btn{min-width:120px;min-height:44px;cursor:pointer}
 .submission-complete .btn:focus-visible{outline:3px solid #315b3d;outline-offset:4px}
+.blog-review-list {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.blog-review-link {
+  display: grid;
+  gap: 6px;
+  padding: clamp(18px, 4vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  color: var(--deep);
+}
+.blog-review-link:hover { border-color: var(--green); }
+.blog-review-source { font-size: 13px; color: #525e53; }
+.blog-review-link strong { font-size: clamp(16px, 2.5vw, 20px); overflow-wrap: anywhere; }
+.blog-review-action { font-size: 13px; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
