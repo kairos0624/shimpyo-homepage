@@ -355,7 +355,8 @@ body.inquiry-modal-open{overflow:hidden}
   <form id="blogReviewForm" class="program-edit">
     <label>후기 제목<input name="title" maxlength="160" required></label>
     <label>네이버 블로그 글 주소<input type="url" name="url" required></label>
-    <button class="primary" type="submit">홈페이지에 후기 추가</button>
+    <button class="primary" type="submit" id="saveBlogReview">홈페이지에 후기 추가</button>
+    <button type="button" id="cancelBlogReview" hidden>수정 취소</button>
   </form>
   <p id="blogReviewStatus" role="status"></p>
   <ul id="adminBlogReviewList"></ul>
@@ -685,6 +686,22 @@ async function adminPost(url,payload){const t=await fetch('/api/admin/csrf',{cac
 const blogReviewSettings = document.getElementById('blogReviewSettings');
 const blogReviewForm = document.getElementById('blogReviewForm');
 const blogReviewStatus = document.getElementById('blogReviewStatus');
+const saveBlogReview = document.getElementById('saveBlogReview');
+const cancelBlogReview = document.getElementById('cancelBlogReview');
+let editingBlogReview = null;
+
+function resetBlogReviewForm() {
+  editingBlogReview = null;
+  blogReviewForm.reset();
+  saveBlogReview.textContent = '홈페이지에 후기 추가';
+  cancelBlogReview.hidden = true;
+}
+
+cancelBlogReview.addEventListener('click', () => {
+  resetBlogReviewForm();
+  blogReviewStatus.textContent = '';
+  blogReviewForm.elements.title.focus();
+});
 
 async function loadBlogReviews() {
   const response = await fetch('/api/admin/blog-reviews', {cache:'no-store'});
@@ -694,7 +711,20 @@ async function loadBlogReviews() {
     const item = document.createElement('li');
     const link = el('a', review.title);
     link.href = review.url;
-    item.append(link);
+    const edit = el('button', '수정');
+    edit.type = 'button';
+    edit.setAttribute('aria-label', review.title + ' 수정');
+    edit.addEventListener('click', () => {
+      if (saveBlogReview.disabled) return;
+      editingBlogReview = review.id;
+      blogReviewForm.elements.title.value = review.title;
+      blogReviewForm.elements.url.value = review.url;
+      saveBlogReview.textContent = '후기 수정 저장';
+      cancelBlogReview.hidden = false;
+      blogReviewStatus.textContent = '';
+      blogReviewForm.elements.title.focus();
+    });
+    item.append(link, ' ', edit);
     return item;
   });
   document.getElementById('adminBlogReviewList').replaceChildren(...items);
@@ -708,18 +738,21 @@ blogReviewSettings.addEventListener('toggle', async () => {
 
 blogReviewForm.addEventListener('submit', async event => {
   event.preventDefault();
-  const button = blogReviewForm.querySelector('button');
-  button.disabled = true;
+  const reviewId = editingBlogReview;
+  saveBlogReview.disabled = true;
+  cancelBlogReview.disabled = true;
   blogReviewStatus.textContent = '';
   try {
-    await adminPost('/api/admin/blog-reviews', Object.fromEntries(new FormData(blogReviewForm)));
-    blogReviewForm.reset();
-    blogReviewStatus.textContent = '홈페이지에 후기를 추가했습니다.';
+    const path = reviewId === null ? '/api/admin/blog-reviews' : '/api/admin/blog-reviews/' + reviewId;
+    await adminPost(path, Object.fromEntries(new FormData(blogReviewForm)));
+    resetBlogReviewForm();
+    blogReviewStatus.textContent = reviewId === null ? '홈페이지에 후기를 추가했습니다.' : '후기를 수정했습니다.';
     await loadBlogReviews().catch(() => { blogReviewStatus.textContent += ' 목록을 다시 열어 확인해 주세요.'; });
   } catch (error) {
     blogReviewStatus.textContent = error.message;
   } finally {
-    button.disabled = false;
+    saveBlogReview.disabled = false;
+    cancelBlogReview.disabled = false;
   }
 });
 async function loadDashboard(){const m=document.getElementById('dashboardMsg');try{const r=await fetch('/api/admin/dashboard',{cache:'no-store'});if(!r.ok)throw Error('현황을 불러오지 못했습니다.');const d=await r.json();m.textContent='';const cards=document.getElementById('dashboardCards');cards.replaceChildren();for(const [label,num] of [['오늘 상담 예약',d.today],['승인 대기',d.pending],['이번 달 상담 예약',d.month],['전체 예약',d.total],['미확인 문의',d.inquiries]]){const div=el('div','');div.className='stat';div.append(el('div',label),el('strong',String(num)+'건'));cards.append(div)}const todayRoot=document.getElementById('dashboardToday');todayRoot.replaceChildren();const todayItems=d.today_schedule||[];if(!todayItems.length)todayRoot.append(el('p','오늘 예정된 상담이 없습니다.'));for(const x of todayItems){const line=el('div','');line.className='schedule-today-row';const desc=el('span',x.slot+' · '+x.program+' · '+x.name+' · '+(x.status==='approved'?'승인 완료':'승인 대기'));const go=el('button','예약 관리');go.type='button';go.onclick=()=>{showTab('bookings');document.getElementById('bookingSearch').value=x.name;currentPage=1;render()};line.append(desc,go);todayRoot.append(line)}const list=document.getElementById('dashboardUpcoming');list.replaceChildren();if(!d.upcoming.length)list.append(el('p','예정된 상담이 없습니다.'));for(const x of d.upcoming){const row=el('p',x.day+' '+x.slot+' · '+x.program+' · '+({approved:'승인 완료',pending:'승인 대기'}[x.status]||x.status));list.append(row)}}catch(e){m.textContent=e.message}}
